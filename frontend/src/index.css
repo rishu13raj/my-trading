@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-surface text-white font-mono antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-panel border border-border rounded-xl p-4;
+  }
+  .btn {
+    @apply px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-accent hover:bg-indigo-500 text-white;
+  }
+  .btn-success {
+    @apply btn bg-profit hover:bg-green-400 text-white;
+  }
+  .btn-danger {
+    @apply btn bg-loss hover:bg-red-400 text-white;
+  }
+  .btn-warn {
+    @apply btn bg-warn hover:bg-yellow-400 text-black;
+  }
+  .label {
+    @apply text-xs text-muted uppercase tracking-wider;
+  }
+  .value-lg {
+    @apply text-2xl font-bold tabular-nums;
+  }
+  .value-sm {
+    @apply text-sm font-semibold tabular-nums;
+  }
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold;
+  }
+}
