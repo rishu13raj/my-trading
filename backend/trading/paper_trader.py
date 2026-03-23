@@ -7,7 +7,7 @@ from strategy.stop_loss import calculate_stop_loss
 class PaperTrader:
     """Paper trading simulator"""
 
-    def place_order(self, symbol: str, direction: str, quantity: int, entry_price: float) -> Optional[int]:
+    def place_order(self, symbol: str, direction: str, quantity: int, entry_price: float, signal_meta: dict = None) -> Optional[int]:
         """
         Place a paper order (simulated)
 
@@ -32,7 +32,8 @@ class PaperTrader:
             direction=direction,
             entry_price=entry_price,
             entry_qty=quantity,
-            stop_loss_price=stop_loss_price
+            stop_loss_price=stop_loss_price,
+            signal_meta=signal_meta
         )
 
         print(f"✓ Paper {direction} order placed: {symbol} x{quantity} @ ₹{entry_price}")

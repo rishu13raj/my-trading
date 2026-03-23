@@ -253,10 +253,7 @@ function buildStockTabHTML(symbol) {
             <div id="trades-${symbol}" class="trade-log"><div class="empty">No trades today</div></div>
         </div>
         <div class="section">
-            <div class="log-header">
-                <h3>Live Activity</h3>
-                <button class="btn-refresh" onclick="refreshStockLog('${symbol}')">↻ Refresh</button>
-            </div>
+            <h3>Latest Activity</h3>
             <div id="log-${symbol}" class="activity-log"><div class="empty">No activity yet</div></div>
         </div>
     `;
@@ -715,82 +712,28 @@ function startWebSocket() {
 }
 
 
-async function refreshStockLog(symbol) {
-    try {
-        const today = new Date().toISOString().split('T')[0];
-        const res = await fetch(`${API_URL}/logs/${today}?symbol=${symbol}`);
-        const data = await res.json();
-        if (!data.lines) return;
-        const el = document.getElementById('log-' + symbol);
-        if (!el) return;
-        el.innerHTML = '';
-        [...data.lines].reverse().forEach(line => {
-            const div = document.createElement('div');
-            div.className = 'log-line info';
-            div.innerHTML = `<span class="log-msg">${line.trim()}</span>`;
-            el.appendChild(div);
-        });
-    } catch (e) {}
-}
 
 function appendActivityLog(entries) {
-    // Overview: show last 10 entries across ALL stocks (zombie detector)
+    if (!entries.length) return;
+
+    // Overview: show the single latest entry across all stocks
     const overviewEl = document.getElementById('overviewActivityLog');
-    if (overviewEl && entries.length > 0) {
-        if (overviewEl.querySelector('.empty')) overviewEl.innerHTML = '';
-        const reversed = [...entries].reverse();
-        reversed.forEach(e => {
-            const line = document.createElement('div');
-            line.className = `log-line ${e.level}`;
-            line.innerHTML = `<span class="log-time">${e.time}</span><span class="log-msg">${e.symbol ? '['+e.symbol+'] ' : ''}${e.msg}</span>`;
-            overviewEl.insertBefore(line, overviewEl.firstChild);
-        });
-        // Keep only last 10 in overview
-        while (overviewEl.children.length > 10) overviewEl.removeChild(overviewEl.lastChild);
+    if (overviewEl) {
+        const latest = entries[entries.length - 1];
+        overviewEl.innerHTML = `<div class="log-line ${latest.level}"><span class="log-time">${latest.time}</span><span class="log-msg">${latest.symbol ? '['+latest.symbol+'] ' : ''}${latest.msg}</span></div>`;
     }
 
-    // Fan out to per-stock log tabs
+    // Per-stock tabs: show the single latest entry for that stock
+    // Find the latest entry per symbol from this batch
+    const latestPerSymbol = {};
     entries.forEach(e => {
-        if (e.symbol) {
-            const stockLogEl = document.getElementById('log-' + e.symbol);
-            if (stockLogEl) appendToLog(stockLogEl, [e]);
-        }
+        if (e.symbol) latestPerSymbol[e.symbol] = e;
+    });
+    Object.entries(latestPerSymbol).forEach(([symbol, e]) => {
+        const el = document.getElementById('log-' + symbol);
+        if (el) el.innerHTML = `<div class="log-line ${e.level}"><span class="log-time">${e.time}</span><span class="log-msg">${e.msg}</span></div>`;
     });
 }
-
-const LOG_MAX_ENTRIES = 1500;   // hard cap per tab
-const LOG_MAX_AGE_MS  = 10 * 60 * 1000;  // 10 minutes
-
-function appendToLog(el, entries) {
-    if (!el) return;
-    if (el.querySelector('.empty')) el.innerHTML = '';
-    const now = Date.now();
-    // Prepend newest entries at top (reverse so latest appears first)
-    const reversed = [...entries].reverse();
-    reversed.forEach(e => {
-        const line = document.createElement('div');
-        line.className = `log-line ${e.level}`;
-        line.dataset.ts = now;  // epoch ms when added — used for age-based pruning
-        line.innerHTML = `<span class="log-time">${e.time}</span><span class="log-msg">${e.msg}</span>`;
-        el.insertBefore(line, el.firstChild);
-    });
-    // Hard cap safety net
-    while (el.children.length > LOG_MAX_ENTRIES) el.removeChild(el.lastChild);
-}
-
-// Purge log entries older than 10 minutes from all stock tab log panels
-function purgeOldLogs() {
-    const cutoff = Date.now() - LOG_MAX_AGE_MS;
-    document.querySelectorAll('[id^="log-"]').forEach(el => {
-        Array.from(el.children).forEach(child => {
-            if (child.dataset.ts && Number(child.dataset.ts) < cutoff) child.remove();
-        });
-        if (el.children.length === 0) {
-            el.innerHTML = '<div class="empty">No activity yet</div>';
-        }
-    });
-}
-setInterval(purgeOldLogs, 60_000);  // run every minute
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {

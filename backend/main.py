@@ -532,6 +532,32 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         await websocket.close()
 
+def _build_signal_meta(signal: dict, tick_history: list, bid_qty: int, ask_qty: int) -> dict:
+    """Capture market context at entry moment for ML training"""
+    from datetime import datetime, time as dtime
+    now = datetime.now()
+    session_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
+    minutes_since_open = int((now - session_open).total_seconds() / 60)
+
+    total = bid_qty + ask_qty
+    norm_imbalance = (bid_qty - ask_qty) / total if total > 0 else 0
+    ratio = bid_qty / ask_qty if ask_qty > 0 else 0
+
+    # OFI: delta between last two ticks
+    ofi = 0
+    if len(tick_history) >= 2:
+        t0, t1 = tick_history[0], tick_history[1]  # newest, second-newest
+        ofi = (t0.get('bid_qty', 0) - t1.get('bid_qty', 0)) - (t0.get('ask_qty', 0) - t1.get('ask_qty', 0))
+
+    return {
+        'ratio': round(ratio, 4),
+        'ofi': ofi,
+        'confidence': round(signal.get('confidence', 0), 4),
+        'norm_imbalance': round(norm_imbalance, 4),
+        'minutes_since_open': max(0, minutes_since_open),
+    }
+
+
 def on_tick_received(tick_data):
     """Callback when new tick is received"""
     if not monitoring:
@@ -609,7 +635,8 @@ def on_tick_received(tick_data):
             else:
                 from trading.portfolio import portfolio as _portfolio
                 qty = _portfolio.calculate_quantity(current_price)
-                trade_id = order_manager.process_signal(symbol, signal, current_price)
+                signal_meta = _build_signal_meta(signal, tick_history, bid_qty, ask_qty)
+                trade_id = order_manager.process_signal(symbol, signal, current_price, signal_meta=signal_meta)
                 log_event("trade", f"OPENED {signal['action']} {symbol} @ ₹{current_price}  qty={qty} (trade #{trade_id})", symbol=symbol)
 
     else:
@@ -623,7 +650,8 @@ def on_tick_received(tick_data):
                 log_event("trade", f"REVERSED {pos['direction']}→{signal['action']} {symbol} @ ₹{current_price} | signal flipped", symbol=symbol)
                 _last_exit_time[symbol] = _dt.now()
                 if not db.get_trading_paused():
-                    trade_id = order_manager.process_signal(symbol, signal, current_price)
+                    signal_meta = _build_signal_meta(signal, tick_history, bid_qty, ask_qty)
+                    trade_id = order_manager.process_signal(symbol, signal, current_price, signal_meta=signal_meta)
                     log_event("trade", f"OPENED {signal['action']} {symbol} @ ₹{current_price} (reversal trade #{trade_id})", symbol=symbol)
             else:
                 log_event("signal", f"{symbol} [holding {pos['direction']}] → signal={signal['action']} ({signal['confidence']:.0%})  {signal['reason']}", symbol=symbol)

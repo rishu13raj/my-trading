@@ -14,21 +14,35 @@ A sophisticated momentum-based options/stock trading system using Zerodha APIs.
 ./setup.sh
 ```
 
-### Step 2: Start Services
+### Step 2: Start Services (every time)
 
-**Terminal 1 - Backend:**
+**Terminal 1 — Backend:**
 ```bash
-./start.sh backend
+conda activate my-trading
+cd backend
+python main.py
 ```
+Backend runs at: `http://localhost:8000`
 
-**Terminal 2 - Frontend:**
+**Terminal 2 — Frontend:**
 ```bash
-./start.sh frontend
+cd frontend
+npm start
 ```
+Dashboard runs at: `http://localhost:3001`
 
 ### Step 3: Open Dashboard
 ```
-http://localhost:3000
+http://localhost:3001
+```
+
+### Killing stuck processes
+```bash
+# Backend
+lsof -ti:8000 | xargs kill -9
+
+# Frontend
+lsof -ti:3001 | xargs kill -9
 ```
 
 ---
@@ -40,7 +54,7 @@ http://localhost:3000
 | `./setup.sh` | One-time setup (installs all dependencies) |
 | `./start.sh both` | Start both services (run frontend in another terminal) |
 | `./start.sh backend` | Start FastAPI server only (port 8000) |
-| `./start.sh frontend` | Start web dashboard only (port 3000) |
+| `./start.sh frontend` | Start web dashboard only (port 3001) |
 | `./start.sh check` | Check if services are running |
 | `conda activate my-trading` | Activate Python environment manually |
 | `npm start` (in frontend/) | Start frontend manually |
@@ -55,6 +69,7 @@ http://localhost:3000
 - **Database**: SQLite
 - **Real-time Data**: Zerodha WebSocket API
 - **Strategy**: Bid-ask imbalance + momentum detection
+- **Ports**: Backend 8000, Frontend 3001
 
 ### Frontend (JavaScript)
 - **Runtime**: Node.js 20.10 (via asdf)
@@ -74,8 +89,8 @@ http://localhost:3000
 5. Exit on: -5% stop loss OR 1-hour time OR momentum reversal
 
 **Capital Management:**
-- Max 2 active trades simultaneously
-- ₹50,000 per trade
+- Max 5 active trades simultaneously
+- ₹50,000 per trade (configurable via dashboard)
 - ₹100,000 daily capital limit
 - Paper trading by default (no real money)
 
@@ -185,6 +200,8 @@ All settings managed via `.env`:
 
 - **QUICKSTART.md** - Detailed setup instructions
 - **SETUP.md** - Full feature documentation
+- **ML_RESEARCH.md** - ML/AI roadmap, feature engineering notes, model progression plan
+- **TODO.md** - Pending improvements
 - **backend/main.py** - API endpoint documentation
 - **start.sh** - Service startup script
 - **setup.sh** - Automated setup script

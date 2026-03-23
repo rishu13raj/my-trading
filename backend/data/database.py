@@ -49,9 +49,27 @@ class Database:
                 stop_loss_price REAL NOT NULL,
                 pnl REAL,
                 mode TEXT NOT NULL DEFAULT 'paper',
+                -- Signal metadata at entry (for ML training)
+                entry_ratio REAL,
+                entry_ofi REAL,
+                entry_signal_confidence REAL,
+                entry_norm_imbalance REAL,
+                entry_minutes_since_open INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Add signal metadata columns to existing DBs that predate this schema
+        for col, typedef in [
+            ('entry_ratio', 'REAL'),
+            ('entry_ofi', 'REAL'),
+            ('entry_signal_confidence', 'REAL'),
+            ('entry_norm_imbalance', 'REAL'),
+            ('entry_minutes_since_open', 'INTEGER'),
+        ]:
+            try:
+                cursor.execute(f"ALTER TABLE trades ADD COLUMN {col} {typedef}")
+            except Exception:
+                pass  # column already exists
 
         # Settings table - persist app state across restarts
         cursor.execute("""
@@ -89,14 +107,23 @@ class Database:
         conn.commit()
         conn.close()
 
-    def insert_trade(self, symbol: str, direction: str, entry_price: float, entry_qty: int, stop_loss_price: float):
-        """Insert a new trade"""
+    def insert_trade(self, symbol: str, direction: str, entry_price: float, entry_qty: int,
+                     stop_loss_price: float, signal_meta: dict = None):
+        """Insert a new trade with optional signal metadata for ML training"""
         conn = self.get_connection()
         cursor = conn.cursor()
+        meta = signal_meta or {}
         cursor.execute("""
-            INSERT INTO trades (symbol, direction, entry_price, entry_time, entry_qty, stop_loss_price, mode)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (symbol, direction, entry_price, datetime.now(), entry_qty, stop_loss_price, 'paper' if config.PAPER_TRADING else 'live'))
+            INSERT INTO trades (
+                symbol, direction, entry_price, entry_time, entry_qty, stop_loss_price, mode,
+                entry_ratio, entry_ofi, entry_signal_confidence, entry_norm_imbalance, entry_minutes_since_open
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            symbol, direction, entry_price, datetime.now(), entry_qty, stop_loss_price,
+            'paper' if config.PAPER_TRADING else 'live',
+            meta.get('ratio'), meta.get('ofi'), meta.get('confidence'),
+            meta.get('norm_imbalance'), meta.get('minutes_since_open')
+        ))
         conn.commit()
         trade_id = cursor.lastrowid
         conn.close()

@@ -11,7 +11,7 @@ class OrderManager:
     def __init__(self):
         self.pending_entries = {}  # Track pending entry monitors per symbol
 
-    def process_signal(self, symbol: str, signal: Dict, current_price: float) -> Optional[int]:
+    def process_signal(self, symbol: str, signal: Dict, current_price: float, signal_meta: dict = None) -> Optional[int]:
         """
         Process trading signal and place order if applicable
 
@@ -39,7 +39,8 @@ class OrderManager:
             symbol=symbol,
             direction=direction,
             quantity=quantity,
-            entry_price=current_price
+            entry_price=current_price,
+            signal_meta=signal_meta
         )
 
         return trade_id
