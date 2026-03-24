@@ -11,7 +11,7 @@ class OrderManager:
     def __init__(self):
         self.pending_entries = {}  # Track pending entry monitors per symbol
 
-    def process_signal(self, symbol: str, signal: Dict, current_price: float, signal_meta: dict = None) -> Optional[int]:
+    def process_signal(self, symbol: str, signal: Dict, current_price: float, signal_meta: dict = None, is_flip: bool = False) -> Optional[int]:
         """
         Process trading signal and place order if applicable
 
@@ -40,12 +40,13 @@ class OrderManager:
             direction=direction,
             quantity=quantity,
             entry_price=current_price,
-            signal_meta=signal_meta
+            signal_meta=signal_meta,
+            is_flip=is_flip
         )
 
         return trade_id
 
-    def check_exits(self, tick_data: Dict) -> List[Dict]:
+    def check_exits(self, tick_data: Dict, peak_prices: dict = None) -> List[Dict]:
         """
         Check if any active positions should be exited
 
@@ -74,7 +75,8 @@ class OrderManager:
             tick_history = db.get_recent_ticks(symbol, limit=100)
 
             # Check if should exit
-            should_exit_flag, reason = should_exit(trade, tick_history, current_price)
+            peak = (peak_prices or {}).get(trade['id'])
+            should_exit_flag, reason = should_exit(trade, tick_history, current_price, peak_price=peak)
 
             if should_exit_flag:
                 # Close the trade
@@ -89,7 +91,8 @@ class OrderManager:
                     'symbol': symbol,
                     'action': 'CLOSED',
                     'reason': reason,
-                    'success': success
+                    'success': success,
+                    'peak_price': peak
                 })
 
         return results

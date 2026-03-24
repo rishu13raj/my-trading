@@ -352,7 +352,7 @@ body {
 /* Summary */
 .summary {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 15px;
     margin-bottom: 20px;
 }
@@ -591,4 +591,168 @@ body {
 .loading {
     display: inline-block;
     animation: spin 1s linear infinite;
+}
+
+/* Scan button & results */
+.section-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.section-header-row h3 { margin: 0; }
+
+.btn-scan {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: none;
+    background: #6366f1;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-scan:hover { background: #4f46e5; }
+.btn-scan:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+.scan-results {
+    margin-top: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 13px;
+}
+.scan-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 12px;
+    background: var(--light);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+.scan-add-all-btn {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 5px;
+    border: none;
+    background: #6366f1;
+    color: #fff;
+    cursor: pointer;
+}
+.scan-add-all-btn:disabled { background: #c7d2fe; cursor: not-allowed; }
+
+.scan-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+}
+.scan-row:last-child { border-bottom: none; }
+.scan-rank { width: 16px; color: var(--text-muted); font-weight: 700; font-size: 12px; }
+.scan-symbol { width: 90px; font-weight: 700; }
+.scan-ratio { width: 40px; font-size: 12px; color: var(--text-muted); }
+.scan-bar { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.scan-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+.scan-bias { width: 36px; font-size: 11px; font-weight: 700; }
+.scan-add-btn {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: none;
+    background: #6366f1;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+}
+.scan-add-btn:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+
+/* Per-stock monitoring rows */
+.stock-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+
+.stock-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--light);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.stock-row-name {
+    flex: 1;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+}
+.stock-row-name:hover { color: var(--primary); }
+
+.stock-open-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #fef3c7;
+    color: #d97706;
+    border: 1px solid #fcd34d;
+}
+
+.stock-toggle {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+.stock-toggle.active {
+    background: #dcfce7;
+    color: #16a34a;
+}
+.stock-toggle.active:hover { background: #bbf7d0; }
+.stock-toggle.paused {
+    background: #f1f5f9;
+    color: #94a3b8;
+}
+.stock-toggle.paused:hover { background: #e2e8f0; }
+
+.stock-remove {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: #94a3b8;
+    font-size: 14px;
+    cursor: pointer;
+    line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+}
+.stock-remove:hover:not(:disabled) { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+.stock-remove:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.btn-exit-all {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: none;
+    background: #f59e0b;
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.btn-exit-all:hover { background: #d97706; }
+
+.stock-open-badge.stopped {
+    background: #f1f5f9;
+    color: #64748b;
+    border-color: #cbd5e1;
 }

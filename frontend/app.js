@@ -1,6 +1,17 @@
 // Configuration
 const API_URL = 'http://localhost:8000';
+
+function calcBrokerage(tradeValue, openOnly) {
+    // Actual Zerodha intraday charges (verified from zerodha.com/charges)
+    const brokerage = Math.min(0.0003 * tradeValue, 20) * (openOnly ? 1 : 2);
+    const stt = openOnly ? 0 : 0.00025 * tradeValue;          // 0.025% sell side only (on close)
+    const nse = 0.0000307 * tradeValue * (openOnly ? 1 : 2);   // 0.00307% both sides
+    const stamp = 0.00003 * tradeValue;                         // 0.003% buy side only
+    const gst = 0.18 * (brokerage + nse);
+    return brokerage + stt + nse + stamp + gst;
+}
 let stocks = [];
+let pausedStocks = new Set();
 let monitoring = false;
 let tradingPaused = false;
 let ws = null;
@@ -22,8 +33,11 @@ async function restoreStocks() {
         const data = await response.json();
         if (data.selected_stocks && data.selected_stocks.length > 0 && stocks.length === 0) {
             stocks = data.selected_stocks;
-            renderStocks(); // also calls renderTabs()
         }
+        if (data.paused_stocks) {
+            pausedStocks = new Set(data.paused_stocks);
+        }
+        renderStocks();
     } catch (e) {}
 }
 
@@ -185,19 +199,142 @@ function removeStock(symbol) {
     updateStocksBackend();
 }
 
+async function runScan() {
+    const btn = document.getElementById('scanBtn');
+    const panel = document.getElementById('scanResults');
+    btn.disabled = true;
+    btn.textContent = '⏳ Scanning...';
+    panel.style.display = 'none';
+
+    try {
+        const res = await fetch(`${API_URL}/scan`);
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        renderScanResults(data.results, data.scanned);
+    } catch (e) {
+        alert('Scan failed: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '📡 Scan';
+    }
+}
+
+function renderScanResults(results, scanned) {
+    const panel = document.getElementById('scanResults');
+    const activeTrades = Array.from(document.querySelectorAll('.stock-tag'))
+        .map(t => t.textContent.trim().replace('×', '').trim());
+
+    const rows = results.map((r, i) => {
+        const alreadyAdded = stocks.includes(r.symbol);
+        const barWidth = Math.round(r.imbalance * 100);
+        const biasColor = r.bias === 'BUY' ? '#22c55e' : '#ef4444';
+        return `
+        <div class="scan-row">
+            <span class="scan-rank">${i + 1}</span>
+            <span class="scan-symbol">${r.symbol}</span>
+            <span class="scan-ratio">${r.ratio}x</span>
+            <div class="scan-bar"><div class="scan-bar-fill" style="width:${barWidth}%;background:${biasColor}"></div></div>
+            <span class="scan-bias" style="color:${biasColor}">${r.bias}</span>
+            <button class="scan-add-btn" onclick="addFromScan('${r.symbol}')" ${alreadyAdded ? 'disabled' : ''}>
+                ${alreadyAdded ? '✓' : '+'}
+            </button>
+        </div>`;
+    }).join('');
+
+    const newSymbols = results.map(r => r.symbol).filter(s => !stocks.includes(s));
+    panel.innerHTML = `
+        <div class="scan-header">
+            <span>📡 Top ${results.length} by imbalance — ${scanned} scanned</span>
+            <button class="scan-add-all-btn" onclick="addAllFromScan(${JSON.stringify(newSymbols)})" ${newSymbols.length === 0 ? 'disabled' : ''}>
+                + Add All
+            </button>
+        </div>
+        ${rows}`;
+    panel.style.display = 'block';
+}
+
+function addFromScan(symbol) {
+    if (stocks.includes(symbol)) return;
+    if (stocks.length >= maxWatchedStocks) { alert(`Max ${maxWatchedStocks} stocks`); return; }
+    stocks.push(symbol);
+    renderStocks();
+    updateStocksBackend();
+    // Refresh scan panel to update button states
+    const panel = document.getElementById('scanResults');
+    if (panel.style.display !== 'none') {
+        panel.querySelectorAll('.scan-add-btn').forEach(btn => {
+            const sym = btn.closest('.scan-row').querySelector('.scan-symbol').textContent;
+            if (sym === symbol) { btn.disabled = true; btn.textContent = '✓'; }
+        });
+        const newSymbols = Array.from(panel.querySelectorAll('.scan-add-btn'))
+            .filter(b => !b.disabled)
+            .map(b => b.closest('.scan-row').querySelector('.scan-symbol').textContent);
+        const addAllBtn = panel.querySelector('.scan-add-all-btn');
+        if (addAllBtn) { addAllBtn.disabled = newSymbols.length === 0; addAllBtn.onclick = () => addAllFromScan(newSymbols); }
+    }
+}
+
+function addAllFromScan(symbols) {
+    symbols.forEach(sym => {
+        if (!stocks.includes(sym) && stocks.length < maxWatchedStocks) stocks.push(sym);
+    });
+    renderStocks();
+    updateStocksBackend();
+    // Re-render scan panel with updated states
+    const panel = document.getElementById('scanResults');
+    if (panel.style.display !== 'none') {
+        panel.querySelectorAll('.scan-add-btn').forEach(btn => { btn.disabled = true; btn.textContent = '✓'; });
+        const addAllBtn = panel.querySelector('.scan-add-all-btn');
+        if (addAllBtn) addAllBtn.disabled = true;
+    }
+}
+
 function renderStocks() {
     const container = document.getElementById('selectedStocks');
     if (stocks.length === 0) {
-        container.innerHTML = '<div class="empty">No stocks selected</div>';
-    } else {
-        container.innerHTML = stocks.map(stock => `
-            <div class="stock-tag" onclick="switchTab('${stock}')" style="cursor:pointer">
-                ${stock}
-                <span class="remove" onclick="event.stopPropagation();removeStock('${stock}')">×</span>
-            </div>
-        `).join('');
+        container.innerHTML = '<div class="empty">No stocks added</div>';
+        renderTabs();
+        return;
     }
+
+    // Get symbols with open trades from the positions table
+    const openTradeSymbols = new Set(
+        Array.from(document.querySelectorAll('#positionsTable tr'))
+            .map(r => r.querySelector('td')?.textContent?.trim())
+            .filter(Boolean)
+    );
+
+    container.innerHTML = stocks.map(symbol => {
+        const paused = pausedStocks.has(symbol);
+        const hasOpenTrade = openTradeSymbols.has(symbol);
+        let badge = '';
+        if (paused)         badge = '<span class="stock-open-badge stopped">Stopped</span>';
+        else if (hasOpenTrade) badge = '<span class="stock-open-badge">OPEN</span>';
+        return `
+        <div class="stock-row">
+            <span class="stock-row-name" onclick="switchTab('${symbol}')">${symbol}</span>
+            ${badge}
+            <button class="stock-toggle ${paused ? 'paused' : 'active'}" onclick="togglePause('${symbol}')" title="${paused ? 'Resume monitoring' : 'Pause new entries'}">
+                ${paused ? '⏸ Paused' : '● Active'}
+            </button>
+            <button class="stock-remove" onclick="removeStock('${symbol}')" ${hasOpenTrade ? 'disabled title="Close trade first"' : 'title="Remove"'}>×</button>
+        </div>`;
+    }).join('');
+
     renderTabs();
+}
+
+async function togglePause(symbol) {
+    const isPaused = pausedStocks.has(symbol);
+    const endpoint = isPaused ? 'resume' : 'pause';
+    try {
+        await fetch(`${API_URL}/stocks/${symbol}/${endpoint}`, { method: 'POST' });
+        if (isPaused) pausedStocks.delete(symbol);
+        else pausedStocks.add(symbol);
+        renderStocks();
+    } catch (e) {
+        showStatus('error', `Failed to ${endpoint} ${symbol}`);
+    }
 }
 
 function renderTabs() {
@@ -393,6 +530,17 @@ async function stopMonitoring() {
     }
 }
 
+async function reconnectWebSocket() {
+    try {
+        const res = await fetch(`${API_URL}/ws/reconnect`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) showStatus('success', data.message);
+        else showStatus('error', data.error || 'Reconnect failed');
+    } catch (e) {
+        showStatus('error', `Error: ${e.message}`);
+    }
+}
+
 function updateTradingPauseBtn() {
     const btn = document.getElementById('pauseTradingBtn');
     if (!btn) return;
@@ -423,14 +571,12 @@ async function toggleTradingPause() {
 }
 
 async function exitTrade(tradeId) {
-    if (!confirm('Exit this trade now?')) return;
     try {
         const res = await fetch(`${API_URL}/exit/${tradeId}`, { method: 'POST' });
         const data = await res.json();
         if (res.ok) {
             showStatus('success', data.message);
-            await updatePositions();
-            await updateTrades();
+            await updateStatus();
         } else {
             showStatus('error', data.error || 'Failed to exit trade');
         }
@@ -476,16 +622,18 @@ async function updateStatus() {
             badge.className = 'status-badge error';
         }
 
-        // Zerodha ticker (KiteTicker) streaming badge — the one that actually matters
+        // Zerodha ticker (KiteTicker) streaming badge — clickable to reconnect
         const wb = document.getElementById('wsBadge');
         if (wb) {
             wb.style.display = '';
             if (data.ticker_connected) {
                 wb.textContent = 'WebSocket Connected';
                 wb.className = 'status-badge connected';
+                wb.title = 'Connected';
             } else {
-                wb.textContent = 'WebSocket Not Connected';
+                wb.textContent = '⟳ WebSocket Not Connected';
                 wb.className = 'status-badge error';
+                wb.title = 'Click to reconnect';
             }
         }
 
@@ -505,6 +653,12 @@ async function updateStatus() {
             updateTradingPauseBtn();
         }
 
+        // Sync paused stocks
+        if (data.paused_stocks) {
+            pausedStocks = new Set(data.paused_stocks);
+            renderStocks();
+        }
+
         // Update portfolio summary
         if (data.portfolio) {
             const p = data.portfolio;
@@ -512,10 +666,15 @@ async function updateStatus() {
             // Row 1
             document.getElementById('dailyPNL').textContent = `₹${p.today_pnl.toFixed(2)}`;
             document.getElementById('dailyPNLPct').textContent = `${p.today_pnl_pct > 0 ? '+' : ''}${p.today_pnl_pct}% on deployed`;
-            document.getElementById('activeTrades').textContent = `${p.active_trades}/${p.max_trades}`;
-            document.getElementById('tradesCount').textContent = `${p.today_closed_count} closed today`;
-
             const closed = p.today_closed_count || 0;
+            const active = p.active_trades || 0;
+            const capital = (data.config?.capital_per_trade) || 100000;
+            const brokerage = Math.round(closed * calcBrokerage(capital, false) + active * calcBrokerage(capital, true));
+            document.getElementById('brokerageCost').textContent = `-₹${brokerage}`;
+            document.getElementById('brokerageDetail').textContent = `${closed} closed · ${active} open`;
+            document.getElementById('activeTrades').textContent = `${p.active_trades}/${p.max_trades}`;
+            document.getElementById('tradesCount').textContent = `${closed} closed today`;
+
             const winRate = closed > 0
                 ? ((p.today_win_count / closed) * 100).toFixed(1) + '%'
                 : '-';
@@ -566,7 +725,7 @@ async function updatePositions() {
                     <td>₹${pos.current_price.toFixed(2)}</td>
                     <td class="${pnlClass}">₹${pnl.toFixed(2)}</td>
                     <td>${status}</td>
-                    <td><button class="btn btn-danger btn-sm" onclick="exitTrade(${pos.id})">Exit</button></td>
+                    <td><button class="btn btn-danger btn-sm" onclick="exitTrade(${pos.trade_id})">Exit</button></td>
                 </tr>
             `;
         }).join('');
@@ -588,23 +747,33 @@ async function updateTrades() {
         }
 
         log.innerHTML = data.trades.map(trade => {
+            const isOpen = !trade.exit_price;
             const pnl = trade.pnl || 0;
             const pnlClass = pnl > 0 ? 'positive' : 'negative';
-            const className = trade.exit_price ? (pnl > 0 ? 'win' : 'loss') : 'open';
+            const className = isOpen ? 'open' : (pnl > 0 ? 'win' : 'loss');
             const qty = trade.entry_qty || 0;
             const capital = trade.entry_price * qty;
             const roiPct = capital > 0 ? (pnl / capital * 100) : 0;
             const exitPrice = trade.exit_price?.toFixed(2) || 'open';
+            const pnlDisplay = isOpen ? '— / —' : `${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)} (${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(3)}%)`;
+            const entryTime = trade.entry_time
+                ? new Date(trade.entry_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+                : '';
 
             return `
-                <div class="trade-item ${className}">
-                    <div>
-                        <span class="trade-symbol">${trade.symbol} ${trade.direction}</span>
-                        <span class="trade-pnl ${pnlClass}">${pnl >= 0 ? '+' : ''}₹${pnl.toFixed(2)} (${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(3)}%)</span>
+                <div class="trade-item ${className}" style="display:flex;gap:12px;align-items:flex-start">
+                    <div style="min-width:52px;text-align:center;padding-top:2px">
+                        <span style="display:inline-block;font-weight:800;font-size:13px;color:#2563eb;letter-spacing:1px;border:2px solid #2563eb;border-radius:6px;padding:3px 6px;line-height:1">${entryTime}</span>
                     </div>
-                    <div class="trade-reason">
-                        ${qty} qty @ ₹${trade.entry_price.toFixed(2)} → ₹${exitPrice} &nbsp;|&nbsp; Capital: ₹${capital.toFixed(0)}
-                        <br><small>Exit: ${trade.exit_reason || 'open'}</small>
+                    <div style="flex:1">
+                        <div>
+                            <span class="trade-symbol">${trade.symbol} ${trade.direction}</span>
+                            <span class="trade-pnl ${isOpen ? '' : pnlClass}">${pnlDisplay}</span>
+                        </div>
+                        <div class="trade-reason">
+                            ${qty} qty @ ₹${trade.entry_price.toFixed(2)} → ₹${exitPrice} &nbsp;|&nbsp; Capital: ₹${capital.toFixed(0)}
+                            <br><small>Exit: ${trade.exit_reason || 'open'}</small>
+                        </div>
                     </div>
                 </div>
             `;
@@ -618,42 +787,68 @@ async function updateTrades() {
 function updateButtons() {
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
-    const exitBtn = document.getElementById('exitBtn');
 
     if (monitoring) {
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        exitBtn.disabled = false;
     } else {
         startBtn.disabled = false;
         stopBtn.disabled = true;
-        exitBtn.disabled = true;
     }
 }
 
 let _configSynced = false;
+let _serverConfig = {};  // last known backend values
+
 function syncConfigSliders(cfg) {
     if (_configSynced) return;  // only init once from backend, then user controls
     _configSynced = true;
+    _serverConfig = { capital_per_trade: cfg.capital_per_trade, stop_loss_pct: cfg.stop_loss_pct, max_active_trades: cfg.max_active_trades };
     const cap = document.getElementById('capital');
     const sl  = document.getElementById('stopLoss');
+    const mt  = document.getElementById('maxTrades');
     if (cap) { cap.value = cfg.capital_per_trade; document.getElementById('capitalDisplay').textContent = cfg.capital_per_trade; }
     if (sl)  { sl.value  = cfg.stop_loss_pct * 100; document.getElementById('slDisplay').textContent = Math.round(cfg.stop_loss_pct * 100); }
+    if (mt)  { mt.value  = cfg.max_active_trades; document.getElementById('maxTradesDisplay').textContent = cfg.max_active_trades; }
 }
 
-let _configTimer = null;
-function updateCapital() {
-    const value = parseInt(document.getElementById('capital').value);
-    document.getElementById('capitalDisplay').textContent = value;
-    clearTimeout(_configTimer);
-    _configTimer = setTimeout(() => patchConfig({ capital_per_trade: value }), 600);
+function onSettingChange() {
+    const capVal = parseInt(document.getElementById('capital').value);
+    const slVal  = parseInt(document.getElementById('stopLoss').value);
+    const mtVal  = parseInt(document.getElementById('maxTrades').value);
+    document.getElementById('capitalDisplay').textContent = capVal;
+    document.getElementById('slDisplay').textContent = slVal;
+    document.getElementById('maxTradesDisplay').textContent = mtVal;
+
+    const dirty = capVal !== _serverConfig.capital_per_trade ||
+                  slVal  !== Math.round(_serverConfig.stop_loss_pct * 100) ||
+                  mtVal  !== _serverConfig.max_active_trades;
+    document.getElementById('pushBtn').disabled = !dirty;
+    document.getElementById('resetBtn').disabled = !dirty;
 }
 
-function updateStopLoss() {
-    const value = parseInt(document.getElementById('stopLoss').value);
-    document.getElementById('slDisplay').textContent = value;
-    clearTimeout(_configTimer);
-    _configTimer = setTimeout(() => patchConfig({ stop_loss_pct: value / 100 }), 600);
+async function pushSettings() {
+    const capVal = parseInt(document.getElementById('capital').value);
+    const slVal  = parseInt(document.getElementById('stopLoss').value);
+    const mtVal  = parseInt(document.getElementById('maxTrades').value);
+    await patchConfig({ capital_per_trade: capVal, stop_loss_pct: slVal / 100, max_active_trades: mtVal });
+    _serverConfig = { capital_per_trade: capVal, stop_loss_pct: slVal / 100, max_active_trades: mtVal };
+    document.getElementById('pushBtn').disabled = true;
+    document.getElementById('resetBtn').disabled = true;
+}
+
+function resetSettings() {
+    const cap = document.getElementById('capital');
+    const sl  = document.getElementById('stopLoss');
+    const mt  = document.getElementById('maxTrades');
+    cap.value = _serverConfig.capital_per_trade;
+    sl.value  = Math.round(_serverConfig.stop_loss_pct * 100);
+    mt.value  = _serverConfig.max_active_trades;
+    document.getElementById('capitalDisplay').textContent = _serverConfig.capital_per_trade;
+    document.getElementById('slDisplay').textContent = Math.round(_serverConfig.stop_loss_pct * 100);
+    document.getElementById('maxTradesDisplay').textContent = _serverConfig.max_active_trades;
+    document.getElementById('pushBtn').disabled = true;
+    document.getElementById('resetBtn').disabled = true;
 }
 
 async function patchConfig(changes) {

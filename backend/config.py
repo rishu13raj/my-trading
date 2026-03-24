@@ -17,13 +17,22 @@ class Config:
     MAX_WATCHED_STOCKS = int(os.getenv("MAX_WATCHED_STOCKS", 10))
     DAILY_CAPITAL = int(os.getenv("DAILY_CAPITAL", 100000))
     STOP_LOSS_PCT = float(os.getenv("STOP_LOSS_PCT", 0.05))
-    TIME_EXIT_MINUTES = int(os.getenv("TIME_EXIT_MINUTES", 60))
+    TIME_EXIT_MINUTES = int(os.getenv("TIME_EXIT_MINUTES", 120))      # exit losing trades after this long
+    TRAIL_STOP_RETRACEMENT = float(os.getenv("TRAIL_STOP_RETRACEMENT", 0.5))  # exit winner if it retraces 50% of peak gain
 
     # Bid-Ask Strategy
     BID_ASK_THRESHOLD_RATIO = float(os.getenv("BID_ASK_THRESHOLD_RATIO", 2.0))
     MOMENTUM_WINDOW_SECONDS = int(os.getenv("MOMENTUM_WINDOW_SECONDS", 60))
     MOMENTUM_REVERSAL_THRESHOLD = float(os.getenv("MOMENTUM_REVERSAL_THRESHOLD", 0.3))
     ENTRY_WAIT_SECONDS = int(os.getenv("ENTRY_WAIT_SECONDS", 60))
+
+    # Momentum Flip (smart reversal + immediate reverse trade)
+    FLIP_RATIO = float(os.getenv("FLIP_RATIO", 1.4))           # opposite imbalance threshold to confirm flip
+    FLIP_CONFIRM_TICKS = int(os.getenv("FLIP_CONFIRM_TICKS", 4))   # consecutive ticks required
+    FLIP_DELTA_WINDOW = int(os.getenv("FLIP_DELTA_WINDOW", 5))     # ticks to look back for delta slope
+    FLIP_ABSORPTION_WINDOW = int(os.getenv("FLIP_ABSORPTION_WINDOW", 8))  # ticks for absorption check
+    MIN_HOLD_BEFORE_FLIP = int(os.getenv("MIN_HOLD_BEFORE_FLIP", 60))     # seconds before flip allowed
+    FLIP_MIN_ADVERSE_PCT = float(os.getenv("FLIP_MIN_ADVERSE_PCT", 0.003))  # min adverse move (0.3%) before flip considered
 
     # Database
     DATABASE_PATH = os.getenv("DATABASE_PATH", "trading.db")

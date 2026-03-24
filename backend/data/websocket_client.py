@@ -82,8 +82,10 @@ class WebSocketClient:
             self.ticker.on_reconnect = self._on_reconnect
             self.ticker.on_noreconnect = self._on_noreconnect
 
-            self._ticker_thread = threading.Thread(target=self.ticker.connect, daemon=True, name="kiteticker")
-            self._ticker_thread.start()
+            # threaded=True: KiteTicker runs reactor in its own thread with
+            # installSignalHandlers=False, avoiding the signal/main-thread crash
+            self.ticker.connect(threaded=True)
+            self._ticker_thread = getattr(self.ticker, 'websocket_thread', None)
             _log("info", f"Zerodha WebSocket connecting to {self.subscribed_symbols}")
 
             # Start watchdog
@@ -101,15 +103,16 @@ class WebSocketClient:
         self._stop_event.set()  # signal watchdog to exit
         if self.ticker:
             try:
-                self.ticker.close()
+                # Stop reconnect attempts WITHOUT calling ticker.close() —
+                # ticker.close() calls reactor.stop() and Twisted reactors cannot
+                # be restarted, which permanently breaks all future reconnects.
+                if hasattr(self.ticker, 'factory') and self.ticker.factory:
+                    self.ticker.factory.stopTrying()
+                if hasattr(self.ticker, 'ws') and self.ticker.ws:
+                    self.ticker.ws.transport.loseConnection()
             except Exception:
                 pass
             self.ticker = None
-        # Give old thread up to 3s to die
-        if self._ticker_thread and self._ticker_thread.is_alive():
-            self._ticker_thread.join(timeout=3)
-            if self._ticker_thread.is_alive():
-                _log("error", "Old ticker thread did not stop in 3s — forcing ahead anyway")
         self.is_connected = False
         self._ticker_thread = None
 
@@ -169,6 +172,18 @@ class WebSocketClient:
 
         _log("info", f"Watchdog reconnecting to {self.subscribed_symbols}")
         self.connect(self.subscribed_symbols)
+
+    def _connect_safe(self):
+        """Wrap ticker.connect() to suppress signal-only-main-thread ValueError"""
+        try:
+            self.ticker.connect()
+        except ValueError as e:
+            if "signal only works in main thread" in str(e):
+                pass  # expected when running in non-main thread — watchdog handles reconnects
+            else:
+                raise
+        except Exception as e:
+            _log("error", f"KiteTicker connect error: {e}")
 
     def _on_tick(self, ws, ticks):
         """Handle incoming ticks"""

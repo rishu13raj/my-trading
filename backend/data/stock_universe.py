@@ -1,0 +1,114 @@
+# Liquid NSE equity stocks for imbalance scanning
+# ~450 stocks covering NIFTY500 + other active names
+# Split into 3 batches of 150 for kite.quote() calls
+
+UNIVERSE = [
+    # NIFTY 50
+    "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR", "ITC", "SBIN",
+    "BHARTIARTL", "KOTAKBANK", "LT", "AXISBANK", "ASIANPAINT", "MARUTI", "TITAN",
+    "SUNPHARMA", "ULTRACEMCO", "WIPRO", "NESTLEIND", "POWERGRID", "NTPC", "BAJFINANCE",
+    "BAJAJFINSV", "TECHM", "HCLTECH", "ONGC", "COALINDIA", "INDUSINDBK", "JSWSTEEL",
+    "M&M", "TATAMOTORS", "TATASTEEL", "ADANIPORTS", "ADANIENT", "CIPLA", "DRREDDY",
+    "DIVISLAB", "GRASIM", "HINDALCO", "BPCL", "EICHERMOT", "HEROMOTOCO", "BRITANNIA",
+    "UPL", "APOLLOHOSP", "SBILIFE", "HDFCLIFE", "LTIM", "BAJAJ-AUTO", "TATACONSUM",
+
+    # Banking & Finance
+    "BANKBARODA", "PNB", "CANBK", "UNIONBANK", "FEDERALBNK", "IDFCFIRSTB", "AUBANK",
+    "RBLBANK", "YESBANK", "BANDHANBNK", "CHOLAFIN", "MUTHOOTFIN", "LICHSGFIN",
+    "SRTRANSFIN", "L&TFH", "RECLTD", "PFC", "IRFC", "HUDCO", "ANGELONE", "CDSL",
+    "BSE", "MCXINDIA", "MOTILALOFS", "ISEC", "IIFL", "MANAPPURAM", "CREDITACC",
+    "SHRIRAMFIN", "SUNDARMFIN", "MMFIN", "POONAWALLA",
+
+    # IT & Technology
+    "PERSISTENT", "MPHASIS", "COFORGE", "LTTS", "KPITTECH", "TATAELXSI", "OFSS",
+    "ZENSARTECH", "MASTEK", "CYIENT", "NIITLTD", "ZENSAR", "BIRLASOFT", "HEXAWARE",
+
+    # Auto & Auto Components
+    "ASHOKLEY", "TVSMOTOR", "MOTHERSON", "BOSCHLTD", "BHARATFORG", "EXIDEIND",
+    "BALKRISIND", "APOLLOTYRE", "CEATLTD", "MINDA", "SUNDRMFAST", "ENDURANCE",
+    "CRAFTSMAN", "SUPRAJIT", "GABRIEL", "AMARARAJA",
+
+    # FMCG & Consumer
+    "DABUR", "MARICO", "COLPAL", "GODREJCP", "EMAMILTD", "VARUNBEV", "RADICO",
+    "MCDOWELL-N", "UNITDSPR", "TATACONSUM", "BIKAJI", "PATANJALI", "ZYDUSWELL",
+    "JYOTHYLAB", "BAJAJCON",
+
+    # Pharma & Healthcare
+    "LUPIN", "AUROPHARMA", "TORNTPHARM", "BIOCON", "GLENMARK", "ABBOTINDIA",
+    "ALKEM", "IPCALAB", "NATCOPHARM", "GRANULES", "LAURUSLABS", "DIVIS",
+    "SUNPHARMA", "AJANTPHARM", "JUBLPHARMA", "SYNGENE", "METROPOLIS", "LALPATHLAB",
+    "MAXHEALTH", "FORTIS",
+
+    # Energy & Power
+    "TATAPOWER", "TORNTPOWER", "ADANIPOWER", "JSWENERGY", "NHPC", "SJVN", "CESC",
+    "ATGL", "GUJGASLTD", "MGL", "IGL", "PETRONET", "GSPL", "HINDPETRO", "MRPL",
+    "CPCL", "OIL", "GAIL", "ADANIGREEN", "ADANITRANS", "INDIAGRID", "POWERGRID",
+
+    # Metals & Mining
+    "VEDL", "SAIL", "NMDC", "NATIONALUM", "HINDCOPPER", "MOIL", "RATNAMANI",
+    "APL", "JSPL", "WELCORP", "TINPLATE", "TATASTEELBSL",
+
+    # Cement
+    "AMBUJACEMENT", "ACC", "SHREECEM", "RAMCOCEM", "DALMIA", "JKCEMENT",
+    "HEIDELBERG", "NUVOCO", "BIRLACORPN", "JKLAKSHMI",
+
+    # Capital Goods & Infra
+    "SIEMENS", "ABB", "HAVELLS", "POLYCAB", "BHEL", "BEL", "HAL", "COCHINSHIP",
+    "MAZAGONDK", "GRINDWELL", "CUMMINSIND", "TIMKEN", "SKF", "SCHAEFFLER",
+    "ELGIEQUIP", "THERMAX", "KEC", "KALPATPOWR", "APAR", "ISGEC", "GPPL",
+    "ADANIINFRA", "GMR", "GVK",
+
+    # Real Estate
+    "DLF", "GODREJPROP", "PRESTIGE", "SOBHA", "OBEROIRLTY", "PHOENIXLTD",
+    "BRIGADE", "MAHLIFE", "SUNTECK", "KOLTEPATIL", "LODHA", "MACROTECH",
+
+    # Telecom & Media
+    "IDEA", "TATACOMM", "INDUSTOWER", "HFCL", "STLTECH", "ROUTE",
+    "ZEEL", "SUNCLAYLTD", "PVRINOX",
+
+    # Retail & New Age
+    "DMART", "TRENT", "NYKAA", "ZOMATO", "PAYTM", "POLICYBZR", "CARTRADE",
+    "EASEMYTRIP", "IRCTC", "IXIGO", "ZAGGLE", "SWIGGY",
+
+    # Chemicals & Specialty
+    "PIDILITIND", "BERGERPAINTS", "KANSAINER", "AKZONOBEL", "GNFC", "DEEPAKNTR",
+    "AAPL", "SUDARSCHEM", "NAVINFLUOR", "SRF", "ATUL", "GALAXYSURF",
+    "BALMLAWRIE", "NOCIL", "TATACHEM", "GHCL", "VINDHYATEL",
+
+    # Textiles
+    "PAGEIND", "RAYMOND", "ARVIND", "TRIDENT", "WELSPUN", "VARDHMAN",
+    "NITIN", "KTIL", "SPANDEX",
+
+    # Logistics & Transport
+    "CONCOR", "BLUEDART", "GATI", "TCI", "MAHINDRALOG", "DELHIVERY",
+    "ALLCARGO", "SNOWMAN",
+
+    # Agriculture & Food
+    "PIIND", "RALLIS", "DHANUKA", "BAYER", "INSECTICID", "KAVERI",
+    "KRBL", "LTFOODS", "AVANTIFEED",
+
+    # Hotels & Tourism
+    "INDHOTEL", "LEMON", "EIHOTEL", "MAHINDRAHOLIDAYS",
+
+    # Miscellaneous large caps
+    "VEDL", "ZYDUSLIFE", "TORNTPOWER", "MFSL", "ICICIGI", "HDFCAMC",
+    "NIPPONLIFE", "UTIAMC", "ABSLAMC", "360ONE", "NIFTYIT",
+
+    # PSU & Defence
+    "NTPCGREEN", "RVNL", "IRCON", "NBCC", "RITES", "RAILVIKAS",
+    "BHEL", "BEML", "MIDHANI", "DATAPATTNS", "PARAS",
+
+    # Additional mid-caps
+    "LGEINDIA", "FIRSTCRY", "JUBLFOOD", "WESTLIFE", "DEVYANI", "RBA",
+    "SAPPHIRE", "ZENSARTECH", "TANLA", "NAZARA", "HAPPYFORGET",
+    "DELTACORP", "GAMESCRAFT",
+]
+
+# Remove duplicates while preserving order
+seen = set()
+UNIVERSE = [x for x in UNIVERSE if not (x in seen or seen.add(x))]
+
+# Split into 3 batches of ~150 for kite.quote() calls
+def get_batches():
+    size = (len(UNIVERSE) + 2) // 3
+    return [UNIVERSE[i:i+size] for i in range(0, len(UNIVERSE), size)]

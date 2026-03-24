@@ -12,7 +12,7 @@
         <header class="header">
             <h1>💹 My Trading Bot</h1>
             <div style="display:flex;gap:8px;align-items:center">
-                <div class="status-badge" id="wsBadge" title="Frontend WebSocket to backend">WS: ...</div>
+                <div class="status-badge" id="wsBadge" onclick="reconnectWebSocket()" style="cursor:pointer" title="Click to reconnect">WS: ...</div>
                 <div class="status-badge" id="statusBadge">Initializing...</div>
             </div>
         </header>
@@ -34,12 +34,16 @@
 
                 <!-- Stock Selection -->
                 <div class="section">
-                    <h3>📈 Select Stocks</h3>
+                    <div class="section-header-row">
+                        <h3>📈 Select Stocks</h3>
+                        <button class="btn-scan" id="scanBtn" onclick="runScan()">📡 Scan</button>
+                    </div>
                     <div class="autocomplete-wrap">
                         <input type="text" id="stockInput" placeholder="Search symbol (e.g., RELIANCE)" class="input" autocomplete="off" oninput="onStockInput()" onkeydown="onStockKeydown(event)">
                         <div id="stockDropdown" class="autocomplete-dropdown"></div>
                     </div>
-                    <div id="selectedStocks" class="stocks-list"></div>
+                    <div id="selectedStocks" class="stock-rows"></div>
+                    <div id="scanResults" class="scan-results" style="display:none"></div>
                 </div>
 
                 <!-- Trading Controls -->
@@ -52,10 +56,7 @@
                         <button id="stopBtn" class="btn btn-danger" onclick="stopMonitoring()" disabled>
                             ⏹️ Stop Monitoring
                         </button>
-                        <button id="exitBtn" class="btn btn-warning" onclick="exitAllPositions()" disabled>
-                            🚪 Exit All
-                        </button>
-                        <button id="pauseTradingBtn" class="btn btn-secondary" onclick="toggleTradingPause()">
+<button id="pauseTradingBtn" class="btn btn-secondary" onclick="toggleTradingPause()">
                             ⏸ Stop Trading Today
                         </button>
                     </div>
@@ -63,14 +64,21 @@
 
                 <!-- Settings -->
                 <div class="section">
-                    <h3>⚙️ Settings</h3>
                     <div class="setting">
                         <label>Capital per Trade: ₹<span id="capitalDisplay">50000</span></label>
-                        <input type="range" id="capital" min="10000" max="200000" step="10000" value="50000" onchange="updateCapital()">
+                        <input type="range" id="capital" min="10000" max="200000" step="10000" value="50000" oninput="onSettingChange()">
                     </div>
                     <div class="setting">
                         <label>Stop Loss: <span id="slDisplay">5</span>%</label>
-                        <input type="range" id="stopLoss" min="1" max="20" step="1" value="5" onchange="updateStopLoss()">
+                        <input type="range" id="stopLoss" min="1" max="20" step="1" value="5" oninput="onSettingChange()">
+                    </div>
+                    <div class="setting">
+                        <label>Max Active Trades: <span id="maxTradesDisplay">2</span></label>
+                        <input type="range" id="maxTrades" min="1" max="10" step="1" value="2" oninput="onSettingChange()">
+                    </div>
+                    <div style="margin-top:10px;display:flex;gap:8px;flex-direction:row">
+                        <button id="pushBtn" class="btn btn-success" onclick="pushSettings()" style="flex:1;font-size:18px;font-weight:700" title="Push to backend" disabled>⬆</button>
+                        <button id="resetBtn" class="btn btn-secondary" onclick="resetSettings()" style="flex:1;font-size:18px;font-weight:700" title="Reset to saved" disabled>⟳</button>
                     </div>
                 </div>
             </div>
@@ -100,9 +108,17 @@
                             <div class="value" id="winRate">-</div>
                             <div class="sublabel" id="winLoss">0W / 0L</div>
                         </div>
+                        <div class="summary-box">
+                            <div class="label">Brokerage</div>
+                            <div class="value" id="brokerageCost">₹0</div>
+                            <div class="sublabel" id="brokerageDetail">0 closed · 0 open</div>
+                        </div>
                     </div>
                     <div class="section">
-                        <h3>📊 Active Positions</h3>
+                        <div class="section-header-row">
+                            <h3>📊 Active Positions</h3>
+                            <button class="btn-exit-all" onclick="exitAllPositions()">Exit All</button>
+                        </div>
                         <table class="table">
                             <thead><tr><th>Symbol</th><th>Direction</th><th>Entry</th><th>Current</th><th>P&L</th><th>Status</th><th></th></tr></thead>
                             <tbody id="positionsTable"><tr><td colspan="7" class="empty">No active positions</td></tr></tbody>

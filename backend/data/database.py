@@ -65,6 +65,7 @@ class Database:
             ('entry_signal_confidence', 'REAL'),
             ('entry_norm_imbalance', 'REAL'),
             ('entry_minutes_since_open', 'INTEGER'),
+            ('is_flip', 'INTEGER DEFAULT 0'),   # 1 = this trade was opened as a momentum flip
         ]:
             try:
                 cursor.execute(f"ALTER TABLE trades ADD COLUMN {col} {typedef}")
@@ -108,7 +109,7 @@ class Database:
         conn.close()
 
     def insert_trade(self, symbol: str, direction: str, entry_price: float, entry_qty: int,
-                     stop_loss_price: float, signal_meta: dict = None):
+                     stop_loss_price: float, signal_meta: dict = None, is_flip: bool = False):
         """Insert a new trade with optional signal metadata for ML training"""
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -116,13 +117,15 @@ class Database:
         cursor.execute("""
             INSERT INTO trades (
                 symbol, direction, entry_price, entry_time, entry_qty, stop_loss_price, mode,
-                entry_ratio, entry_ofi, entry_signal_confidence, entry_norm_imbalance, entry_minutes_since_open
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                entry_ratio, entry_ofi, entry_signal_confidence, entry_norm_imbalance, entry_minutes_since_open,
+                is_flip
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             symbol, direction, entry_price, datetime.now(), entry_qty, stop_loss_price,
             'paper' if config.PAPER_TRADING else 'live',
             meta.get('ratio'), meta.get('ofi'), meta.get('confidence'),
-            meta.get('norm_imbalance'), meta.get('minutes_since_open')
+            meta.get('norm_imbalance'), meta.get('minutes_since_open'),
+            1 if is_flip else 0
         ))
         conn.commit()
         trade_id = cursor.lastrowid
