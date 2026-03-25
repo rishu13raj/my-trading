@@ -627,7 +627,10 @@ async def scan_stocks():
     if not all_quotes:
         return JSONResponse({"error": "Could not fetch any quotes"}, status_code=500)
 
+    from strategy.signal_quality import check_signal_quality
+
     scored = []
+    filtered_out = 0
     for key, q in all_quotes.items():
         symbol = key.replace("NSE:", "")
         buy_qty = q.get("buy_quantity", 0)
@@ -637,14 +640,21 @@ async def scan_stocks():
         if total == 0 or volume < 10000:  # skip illiquid / no order book
             continue
 
+        # Signal quality filter — removes thin books, extreme ratios on shallow books
+        sq = check_signal_quality(buy_qty, sell_qty)  # snapshot mode (no tick history)
+        if not sq['passed']:
+            filtered_out += 1
+            continue
+
         imbalance = abs(buy_qty - sell_qty) / total  # 0-1, higher = stronger
         bias = "BUY" if buy_qty > sell_qty else "SELL"
         ratio = round(buy_qty / sell_qty, 2) if sell_qty > 0 else 99.0
         if bias == "SELL" and buy_qty > 0:
             ratio = round(sell_qty / buy_qty, 2)
 
-        # Weight imbalance by volume activity (log scale so huge volumes don't dominate)
-        score = imbalance * math.log1p(volume)
+        # Score = imbalance × log(volume) × signal quality score
+        # quality_score penalises extreme ratios and thin books that barely passed
+        score = imbalance * math.log1p(volume) * sq['quality_score']
 
         scored.append({
             "symbol": symbol,
@@ -661,7 +671,7 @@ async def scan_stocks():
     for r in top5:
         del r["score"]  # internal only
 
-    print(f"[scan] Scanned {len(all_quotes)} stocks → top 5: {[s['symbol'] for s in top5]}")
+    print(f"[scan] Scanned {len(all_quotes)} stocks → {filtered_out} filtered by signal quality → top 5: {[s['symbol'] for s in top5]}")
     return JSONResponse({"results": top5, "scanned": len(all_quotes)})
 
 
@@ -816,6 +826,11 @@ def on_tick_received(tick_data):
         log_event(level, f"{symbol} → {signal['action']} ({signal['confidence']:.0%})  {signal['reason']}", symbol=symbol)
 
         if signal['action'] in ['BUY', 'SELL'] and can_open:
+            from strategy.signal_quality import check_signal_quality
+            sq = check_signal_quality(bid_qty, ask_qty, tick_history=tick_history)
+            if not sq['passed']:
+                log_event("signal", f"{symbol} signal quality blocked: {sq['reason']}", symbol=symbol)
+                return
             if db.get_trading_paused():
                 pass  # trading paused for today — silently skip new entries
             elif in_cooldown:

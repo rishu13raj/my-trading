@@ -74,7 +74,26 @@ def should_exit(position: Dict, tick_history: list, current_price: float, peak_p
     held_seconds = (datetime.now() - entry_dt).total_seconds()
     held_minutes = held_seconds / 60
 
-    # Check 2: Smart time exit — split on profit/loss
+    # Check 2a: Early profit-protection trailing stop
+    # Activates the moment profit crosses PROFIT_TRAIL_ACTIVATION_PCT — no time gate.
+    # Protects against giving back a meaningful gain while still letting small fluctuations ride.
+    if peak_price is not None:
+        if direction == 'BUY':
+            peak_gain = peak_price - entry_price
+            activation_threshold = entry_price * config.PROFIT_TRAIL_ACTIVATION_PCT
+            if peak_gain >= activation_threshold:
+                trail_stop = entry_price + peak_gain * (1 - config.TRAIL_STOP_RETRACEMENT)
+                if current_price <= trail_stop:
+                    return True, f"PROFIT_TRAIL (retraced {config.TRAIL_STOP_RETRACEMENT*100:.0f}% of peak gain ₹{peak_gain:.2f})"
+        else:  # SELL
+            peak_gain = entry_price - peak_price
+            activation_threshold = entry_price * config.PROFIT_TRAIL_ACTIVATION_PCT
+            if peak_gain >= activation_threshold:
+                trail_stop = entry_price - peak_gain * (1 - config.TRAIL_STOP_RETRACEMENT)
+                if current_price >= trail_stop:
+                    return True, f"PROFIT_TRAIL (retraced {config.TRAIL_STOP_RETRACEMENT*100:.0f}% of peak gain ₹{peak_gain:.2f})"
+
+    # Check 2b: Smart time exit — split on profit/loss
     if held_minutes >= config.TIME_EXIT_MINUTES:
         # Calculate current pnl
         if direction == 'BUY':

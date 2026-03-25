@@ -33,6 +33,10 @@ class Database:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ticks_symbol_ts
+            ON ticks (symbol, timestamp DESC)
+        """)
 
         # Trades table - store all trades
         cursor.execute("""

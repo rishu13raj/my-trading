@@ -18,7 +18,8 @@ class Config:
     DAILY_CAPITAL = int(os.getenv("DAILY_CAPITAL", 100000))
     STOP_LOSS_PCT = float(os.getenv("STOP_LOSS_PCT", 0.05))
     TIME_EXIT_MINUTES = int(os.getenv("TIME_EXIT_MINUTES", 120))      # exit losing trades after this long
-    TRAIL_STOP_RETRACEMENT = float(os.getenv("TRAIL_STOP_RETRACEMENT", 0.5))  # exit winner if it retraces 50% of peak gain
+    TRAIL_STOP_RETRACEMENT = float(os.getenv("TRAIL_STOP_RETRACEMENT", 0.25))  # exit winner if it retraces 25% of peak gain (locks 75% of peak)
+    PROFIT_TRAIL_ACTIVATION_PCT = float(os.getenv("PROFIT_TRAIL_ACTIVATION_PCT", 0.005))  # activate early trail stop once profit >= 0.5% of entry
 
     # Bid-Ask Strategy
     BID_ASK_THRESHOLD_RATIO = float(os.getenv("BID_ASK_THRESHOLD_RATIO", 2.0))
@@ -33,6 +34,14 @@ class Config:
     FLIP_ABSORPTION_WINDOW = int(os.getenv("FLIP_ABSORPTION_WINDOW", 8))  # ticks for absorption check
     MIN_HOLD_BEFORE_FLIP = int(os.getenv("MIN_HOLD_BEFORE_FLIP", 60))     # seconds before flip allowed
     FLIP_MIN_ADVERSE_PCT = float(os.getenv("FLIP_MIN_ADVERSE_PCT", 0.003))  # min adverse move (0.3%) before flip considered
+
+    # Signal Quality Filter (shared by scanner + monitoring)
+    SQ_MIN_TOTAL_QUEUE        = int(os.getenv("SQ_MIN_TOTAL_QUEUE", 10000))    # minimum bid+ask total queue
+    SQ_MIN_SIDE_QUEUE         = int(os.getenv("SQ_MIN_SIDE_QUEUE", 2000))      # minimum on the weaker side
+    SQ_EXTREME_RATIO_THRESHOLD= float(os.getenv("SQ_EXTREME_RATIO_THRESHOLD", 8.0))   # ratios above this need deep book
+    SQ_EXTREME_RATIO_MIN_DEPTH= int(os.getenv("SQ_EXTREME_RATIO_MIN_DEPTH", 25000))   # required depth when ratio is extreme
+    SQ_BUILDUP_TICKS          = int(os.getenv("SQ_BUILDUP_TICKS", 3))          # min confirming ticks in window
+    SQ_BUILDUP_WINDOW         = int(os.getenv("SQ_BUILDUP_WINDOW", 5))         # window to check for buildup
 
     # Database
     DATABASE_PATH = os.getenv("DATABASE_PATH", "trading.db")
