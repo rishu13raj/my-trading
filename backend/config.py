@@ -43,6 +43,13 @@ class Config:
     SQ_BUILDUP_TICKS          = int(os.getenv("SQ_BUILDUP_TICKS", 3))          # min confirming ticks in window
     SQ_BUILDUP_WINDOW         = int(os.getenv("SQ_BUILDUP_WINDOW", 5))         # window to check for buildup
 
+    # Incubation (signal confirmation gate)
+    INCUBATION_MIN_TICKS         = int(os.getenv("INCUBATION_MIN_TICKS", 4))
+    INCUBATION_PRICE_MOVE_PCT    = float(os.getenv("INCUBATION_PRICE_MOVE_PCT", 0.001))  # 0.1%
+    INCUBATION_TIMEOUT_SECS      = int(os.getenv("INCUBATION_TIMEOUT_SECS", 120))
+    INCUBATION_TREND_LOOKBACK_SECS = int(os.getenv("INCUBATION_TREND_LOOKBACK_SECS", 300))  # 5 min
+    INCUBATION_TREND_BLOCK_PCT   = float(os.getenv("INCUBATION_TREND_BLOCK_PCT", 0.002))  # 0.2%
+
     # Database
     DATABASE_PATH = os.getenv("DATABASE_PATH", "trading.db")
 
