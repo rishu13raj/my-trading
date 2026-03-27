@@ -96,6 +96,9 @@ from strategy.types import CandidateSignal
 from strategy.gates.time_of_day import is_trading_blocked, get_threshold_multiplier
 from strategy.gates.volume_spike import check_volume_spike
 from strategy.gates.vwap_alignment import check_vwap_alignment
+from strategy.gates.session_momentum import session_momentum_gate
+from strategy.gates import nifty_alignment
+from strategy.gates import cvd as cvd_gate
 
 
 class Scanner:
@@ -170,29 +173,62 @@ class Scanner:
             )
             return None
 
-        # ── Gate 4b: Time-of-Day Threshold Adjustment ────────────────────────
+        signal_action = signal["action"]
+
+        # ── Conviction Gate 1: Session Momentum (action now known) ────────────
+        if session_momentum_gate.blocks(symbol, signal_action):
+            bias = session_momentum_gate.get_bias(symbol)
+            log_event(
+                "signal",
+                f"{symbol} SESSION_MOMENTUM blocked: {signal_action} against session bias ({bias})",
+                symbol=symbol,
+            )
+            return None
+
+        # ── Conviction Gate 2: Nifty Alignment ───────────────────────────────
+        if nifty_alignment.blocks(signal_action):
+            nifty_dir = nifty_alignment.get_nifty_direction()
+            log_event(
+                "signal",
+                f"{symbol} NIFTY_ALIGNMENT blocked: {signal_action} against Nifty direction ({nifty_dir})",
+                symbol=symbol,
+            )
+            return None
+
+        # ── Conviction Gate 3: CVD ────────────────────────────────────────────
+        if cvd_gate.blocks(signal_action, tick_history):
+            cvd_stats = cvd_gate.compute_cvd(tick_history)
+            log_event(
+                "signal",
+                f"{symbol} CVD blocked: {signal_action} but actual prints "
+                f"{cvd_stats['up_count']}↑ {cvd_stats['down_count']}↓ "
+                f"({cvd_stats['direction']} pressure, opposite to signal)",
+                symbol=symbol,
+            )
+            return None
+
+        # ── Gate 4b: Time-of-Day Threshold Adjustment (lunch gate — BUG FIX) ─
         # During lunch (12:00-13:30), raise threshold by 50%.
-        # This filters weak signals when liquidity is lower.
+        # BUG WAS HERE: signal["details"]["current_ratio"] doesn't exist —
+        # the ratio is nested at signal["details"]["bid_ask"]["current_ratio"].
         threshold_multiplier = get_threshold_multiplier(tick_time)
         effective_threshold = config.BID_ASK_THRESHOLD_RATIO * threshold_multiplier
 
-        # Get raw ratio from signal details
-        bid_ask_analysis = signal.get("details", {})
+        # FIXED: correct path into the nested details structure
+        bid_ask_analysis = signal.get("details", {}).get("bid_ask", {})
         raw_ratio = bid_ask_analysis.get("current_ratio", 0)
 
-        # Check if ratio meets the (possibly adjusted) threshold
-        signal_action = signal["action"]
         if signal_action == "BUY":
             ratio_passes = raw_ratio >= effective_threshold
         else:  # SELL
             ratio_passes = raw_ratio <= (1 / effective_threshold)
 
         if not ratio_passes:
-            multiplier_label = f" (lunch adjustment: {threshold_multiplier}x)" if threshold_multiplier > 1.0 else ""
+            multiplier_label = f" (lunch: {threshold_multiplier}x)" if threshold_multiplier > 1.0 else ""
             log_event(
                 "signal",
-                f"{symbol} threshold blocked: ratio {raw_ratio:.2f}x "
-                f"does not meet effective threshold {effective_threshold:.2f}x{multiplier_label}",
+                f"{symbol} threshold blocked: ratio {raw_ratio:.3f} "
+                f"vs effective {effective_threshold:.2f}x{multiplier_label}",
                 symbol=symbol,
             )
             return None

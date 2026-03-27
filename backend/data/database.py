@@ -30,9 +30,17 @@ class Database:
                 bid_qty INTEGER NOT NULL,
                 ask_qty INTEGER NOT NULL,
                 volume INTEGER NOT NULL,
+                bid_price REAL,
+                ask_price REAL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Migrate existing DBs that predate bid_price/ask_price columns
+        for col in ["bid_price REAL", "ask_price REAL"]:
+            try:
+                cursor.execute(f"ALTER TABLE ticks ADD COLUMN {col}")
+            except Exception:
+                pass  # already exists
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_ticks_symbol_ts
             ON ticks (symbol, timestamp DESC)
@@ -101,14 +109,15 @@ class Database:
         conn.close()
         print(f"✓ Database initialized at {self.db_path}")
 
-    def insert_tick(self, symbol: str, timestamp: int, ltp: float, bid_qty: int, ask_qty: int, volume: int):
+    def insert_tick(self, symbol: str, timestamp: int, ltp: float, bid_qty: int, ask_qty: int,
+                    volume: int, bid_price: float = None, ask_price: float = None):
         """Insert a tick into the database"""
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO ticks (symbol, timestamp, ltp, bid_qty, ask_qty, volume)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (symbol, timestamp, ltp, bid_qty, ask_qty, volume))
+            INSERT INTO ticks (symbol, timestamp, ltp, bid_qty, ask_qty, volume, bid_price, ask_price)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (symbol, timestamp, ltp, bid_qty, ask_qty, volume, bid_price, ask_price))
         conn.commit()
         conn.close()
 

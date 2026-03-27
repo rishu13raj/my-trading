@@ -63,6 +63,24 @@ class Config:
     VOLUME_SPIKE_MULTIPLIER = float(os.getenv("VOLUME_SPIKE_MULTIPLIER", 2.5))  # require 2.5x avg volume
     VOLUME_SPIKE_WINDOW = int(os.getenv("VOLUME_SPIKE_WINDOW", 20))  # look at last 20 ticks
 
+    # Conviction Gates (new architecture)
+    # Session Momentum: establishes stock's directional bias from first 30 min of session.
+    # After the bias window, entries against the session direction are blocked.
+    SESSION_MOMENTUM_WINDOW_MINS = int(os.getenv("SESSION_MOMENTUM_WINDOW_MINS", 30))
+    SESSION_MOMENTUM_THRESHOLD_PCT = float(os.getenv("SESSION_MOMENTUM_THRESHOLD_PCT", 0.002))  # 0.2% move = established bias
+
+    # Nifty Alignment: blocks entries that fight the broad market direction.
+    # If Nifty is trending up over this window, SELL entries are blocked, and vice versa.
+    NIFTY_SYMBOL = os.getenv("NIFTY_SYMBOL", "NIFTY 50")
+    NIFTY_ALIGNMENT_WINDOW_MINS = int(os.getenv("NIFTY_ALIGNMENT_WINDOW_MINS", 15))
+    NIFTY_ALIGNMENT_THRESHOLD_PCT = float(os.getenv("NIFTY_ALIGNMENT_THRESHOLD_PCT", 0.0015))  # 0.15%
+
+    # CVD (Cumulative Volume Delta): blocks entries where actual trades are printing
+    # in the OPPOSITE direction to our OFI signal.
+    # Uses tick-rule: uptick = buyer-initiated, downtick = seller-initiated.
+    CVD_WINDOW_TICKS = int(os.getenv("CVD_WINDOW_TICKS", 20))
+    CVD_BLOCK_THRESHOLD = float(os.getenv("CVD_BLOCK_THRESHOLD", 0.65))  # block if 65%+ ticks are AGAINST signal
+
     # VWAP Alignment Gate
     VWAP_ALIGNMENT_ENABLED = os.getenv("VWAP_ALIGNMENT_ENABLED", "true").lower() == "true"
     VWAP_WINDOW = int(os.getenv("VWAP_WINDOW", 100))  # ticks for VWAP calculation

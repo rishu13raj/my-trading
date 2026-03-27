@@ -54,6 +54,15 @@ class WebSocketClient:
             instruments = self.kite.instruments("NSE")
             symbol_to_token = {i['tradingsymbol']: i['instrument_token'] for i in instruments}
 
+            # Always include Nifty 50 index for the Nifty alignment conviction gate.
+            # Stored as ticks but ignored by the pipeline for trading decisions.
+            from config import config as _cfg
+            nifty_sym = _cfg.NIFTY_SYMBOL
+            if nifty_sym not in symbols and nifty_sym in symbol_to_token:
+                symbols = list(symbols) + [nifty_sym]
+            elif nifty_sym not in symbols:
+                _log("error", f"NIFTY symbol '{nifty_sym}' not found in NSE instruments — Nifty gate will be inactive")
+
             tokens = [symbol_to_token.get(sym) for sym in symbols]
             tokens = [t for t in tokens if t]
 
@@ -200,6 +209,22 @@ class WebSocketClient:
                 ts = tick.get('exchange_timestamp') or tick.get('last_trade_time')
                 timestamp = int(ts.timestamp()) if ts else int(time.time())
 
+                # Extract best bid/ask prices from full-mode depth.
+                # We subscribe with MODE_FULL, so depth is always available.
+                # depth['buy'][0] = best bid, depth['sell'][0] = best ask.
+                depth = tick.get('depth', {})
+                bid_price = None
+                ask_price = None
+                try:
+                    buy_depth = depth.get('buy', [])
+                    sell_depth = depth.get('sell', [])
+                    if buy_depth:
+                        bid_price = buy_depth[0].get('price')
+                    if sell_depth:
+                        ask_price = sell_depth[0].get('price')
+                except Exception:
+                    pass
+
                 if symbol and ltp > 0:
                     db.insert_tick(
                         symbol=str(symbol),
@@ -207,7 +232,9 @@ class WebSocketClient:
                         ltp=ltp,
                         bid_qty=bid_qty,
                         ask_qty=ask_qty,
-                        volume=volume
+                        volume=volume,
+                        bid_price=bid_price,
+                        ask_price=ask_price,
                     )
 
                 self.last_raw_tick = tick
@@ -219,7 +246,9 @@ class WebSocketClient:
                         'bid_qty': bid_qty,
                         'ask_qty': ask_qty,
                         'volume': volume,
-                        'timestamp': timestamp
+                        'timestamp': timestamp,
+                        'bid_price': bid_price,
+                        'ask_price': ask_price,
                     })
 
             except Exception as e:
