@@ -1,3 +1,34 @@
+"""
+strategy/exit_logic.py — All Exit Conditions in Priority Order
+
+EXIT CONDITIONS (checked in this exact priority order)
+─────────────────────────────────────────────────────
+1. STOP_LOSS         — Always active from tick 1.  No minimum hold.
+2. PROFIT_TRAIL      — Once profit >= PROFIT_TRAIL_ACTIVATION_PCT of entry price,
+                       exit if price retraces TRAIL_STOP_RETRACEMENT of the peak gain.
+                       Rationale: lock in most of a real gain rather than give it back.
+3. TIME_EXIT_LOSS    — After TIME_EXIT_MINUTES: hard exit if still losing.
+                       Rationale: a trade that hasn't worked after N minutes is wrong;
+                       holding longer compounds the loss without improving the thesis.
+4. TRAIL_STOP        — After TIME_EXIT_MINUTES: if profitable, switch to trailing stop
+                       instead of hard-exiting a winner.
+5. MOMENTUM_REVERSAL — After 60s minimum hold: detected via is_momentum_slowing().
+                       Rationale: the OFI signal that justified the entry has faded;
+                       the original thesis no longer holds.
+
+PRIORITY REASONING
+──────────────────
+Stop loss first: it is the unconditional risk cap.  Nothing overrides it.
+
+PROFIT_TRAIL before time exit: if a position has a meaningful gain and price starts
+retracing, we want to capture it now — not wait for the time limit.
+
+MOMENTUM_REVERSAL last: it is the weakest signal.  It fires when the OFI imbalance
+that drove entry has decelerated, not when price has actually moved against us.
+Minimum 60s hold prevents it from firing on entry-time noise — OFI naturally
+oscillates in the first minute as order flow adjusts to the new trade.
+"""
+
 from datetime import datetime, timedelta
 from typing import Dict, Tuple
 from config import config

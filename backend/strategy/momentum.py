@@ -1,3 +1,59 @@
+"""
+strategy/momentum.py — OFI Momentum Measurement and Deceleration Detection
+
+PURPOSE
+───────
+detect_direction()    — Returns BUY/SELL/NEUTRAL from the average bid/ask ratio
+                        across the most recent 3 ticks.  Used by signal.py.
+
+is_momentum_slowing() — Detects MOMENTUM_REVERSAL for exit_logic.py.
+                        The question it answers: "has the OFI signal that drove
+                        our entry lost its strength?"
+
+HOW is_momentum_slowing() WORKS
+─────────────────────────────────
+Splits tick_history (newest-first) into two halves:
+  first_half  = newest ticks   (what the market looks like RIGHT NOW)
+  second_half = older ticks    (what the market looked like BEFORE)
+
+For each half, calculate_rate_of_change() computes:
+  rate = (ratio_at_end_of_window - ratio_at_start) / ratio_at_start
+
+Then:
+  deceleration = rate_second - rate_first
+  Fires if deceleration > MOMENTUM_REVERSAL_THRESHOLD (0.3)
+
+INTUITION BEHIND THE FORMULA
+──────────────────────────────
+deceleration > 0 means: the OFI was changing faster in the OLDER half than
+it is in the NEWER half.  The signal that was building has stopped building.
+
+For a BUY trade: the older ticks showed bid growing strongly relative to ask.
+The newer ticks show that growth has stalled or reversed.  The buying momentum
+is exhausted — the crowd that was buying is no longer there.
+
+For a SELL trade: same logic in reverse.  If the older ticks showed ask
+dominating strongly (sellers in control) but newer ticks show the ask
+dominance fading (buyers returning), that SELL thesis is weakening.
+
+WHY THIS DETECTS OFI EXHAUSTION (NOT JUST PRICE MOVEMENT)
+────────────────────────────────────────────────────────────
+Price can stay flat while the order book shifts against us.  A SELL trade
+entered because ask >> bid may still be "at breakeven" on price, but if the
+bid side is suddenly recovering, the institutional selling pressure that
+justified the entry is gone.  This function catches that.  Exiting a flat
+trade early (small profit or scratch) is better than holding into a reversal
+where the book has already shifted against us.
+
+KNOWN LIMITATION
+────────────────
+The formula is direction-agnostic — it uses raw bid/ask ratio regardless of
+whether we are long or short.  The 0.3 threshold was observed to work on the
+available session data but has not been separately calibrated for BUY vs SELL
+trades.  It may fire more readily for SELL trades (where the ratio is
+inherently lower, making percentage changes larger) than for BUY trades.
+"""
+
 from typing import List, Dict, Tuple
 from config import config
 from strategy.bid_ask_ratio import calculate_ratio

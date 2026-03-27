@@ -49,6 +49,23 @@ class Config:
     INCUBATION_TIMEOUT_SECS      = int(os.getenv("INCUBATION_TIMEOUT_SECS", 120))
     INCUBATION_TREND_LOOKBACK_SECS = int(os.getenv("INCUBATION_TREND_LOOKBACK_SECS", 300))  # 5 min
     INCUBATION_TREND_BLOCK_PCT   = float(os.getenv("INCUBATION_TREND_BLOCK_PCT", 0.002))  # 0.2%
+    INCUBATION_MIN_DURATION_SECS = int(os.getenv("INCUBATION_MIN_DURATION_SECS", 30))    # min watch time before confirming
+    INCUBATION_HOLD_TICKS        = int(os.getenv("INCUBATION_HOLD_TICKS", 3))            # ticks price must hold after criteria met
+
+    # Time-of-Day Gate (Gate 4)
+    TRADING_BLOCK_START = os.getenv("TRADING_BLOCK_START", "0915")  # HHMM format, 09:15
+    TRADING_BLOCK_END = os.getenv("TRADING_BLOCK_END", "0930")      # HHMM format, 09:30
+    LUNCH_BLOCK_START = os.getenv("LUNCH_BLOCK_START", "1200")      # HHMM format, 12:00
+    LUNCH_BLOCK_END = os.getenv("LUNCH_BLOCK_END", "1330")          # HHMM format, 13:30
+    LUNCH_THRESHOLD_RATIO_MULTIPLIER = float(os.getenv("LUNCH_THRESHOLD_RATIO_MULTIPLIER", 1.5))
+
+    # Volume Spike Gate
+    VOLUME_SPIKE_MULTIPLIER = float(os.getenv("VOLUME_SPIKE_MULTIPLIER", 2.5))  # require 2.5x avg volume
+    VOLUME_SPIKE_WINDOW = int(os.getenv("VOLUME_SPIKE_WINDOW", 20))  # look at last 20 ticks
+
+    # VWAP Alignment Gate
+    VWAP_ALIGNMENT_ENABLED = os.getenv("VWAP_ALIGNMENT_ENABLED", "true").lower() == "true"
+    VWAP_WINDOW = int(os.getenv("VWAP_WINDOW", 100))  # ticks for VWAP calculation
 
     # Database
     DATABASE_PATH = os.getenv("DATABASE_PATH", "trading.db")

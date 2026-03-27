@@ -93,6 +93,9 @@ from core.logger import log_event
 from strategy.signal import generate_signal
 from strategy.signal_quality import check_signal_quality
 from strategy.types import CandidateSignal
+from strategy.gates.time_of_day import is_trading_blocked, get_threshold_multiplier
+from strategy.gates.volume_spike import check_volume_spike
+from strategy.gates.vwap_alignment import check_vwap_alignment
 
 
 class Scanner:
@@ -104,7 +107,7 @@ class Scanner:
         tick_history: list,
     ) -> Optional[CandidateSignal]:
         """
-        Evaluate one tick for one symbol.
+        Evaluate one tick for one symbol, applying all four gates.
 
         Parameters
         ──────────
@@ -120,6 +123,25 @@ class Scanner:
         bid_qty = tick_data.get("bid_qty", 0)
         ask_qty = tick_data.get("ask_qty", 0)
         current_price = tick_data.get("ltp", 0)
+
+        # ── Gate 4a: Time-of-Day Block ───────────────────────────────────────
+        # Block all entries during opening chaos (09:15-09:30).
+        # Use tick timestamp if available, otherwise use system time
+        tick_time = None
+        if "timestamp" in tick_data and tick_data["timestamp"]:
+            from datetime import datetime as dt_cls
+            try:
+                tick_time = dt_cls.fromtimestamp(tick_data["timestamp"])
+            except (ValueError, OSError):
+                pass  # Invalid timestamp, fall back to system time
+
+        if is_trading_blocked(tick_time):
+            log_event(
+                "signal",
+                f"{symbol} entry blocked: trading blocked during opening period (09:15-09:30)",
+                symbol=symbol,
+            )
+            return None
 
         # ── Check 1: OFI signal ───────────────────────────────────────────────
         # generate_signal() internally calls:
@@ -147,6 +169,47 @@ class Scanner:
                 symbol=symbol,
             )
             return None
+
+        # ── Gate 4b: Time-of-Day Threshold Adjustment ────────────────────────
+        # During lunch (12:00-13:30), raise threshold by 50%.
+        # This filters weak signals when liquidity is lower.
+        threshold_multiplier = get_threshold_multiplier(tick_time)
+        effective_threshold = config.BID_ASK_THRESHOLD_RATIO * threshold_multiplier
+
+        # Get raw ratio from signal details
+        bid_ask_analysis = signal.get("details", {})
+        raw_ratio = bid_ask_analysis.get("current_ratio", 0)
+
+        # Check if ratio meets the (possibly adjusted) threshold
+        signal_action = signal["action"]
+        if signal_action == "BUY":
+            ratio_passes = raw_ratio >= effective_threshold
+        else:  # SELL
+            ratio_passes = raw_ratio <= (1 / effective_threshold)
+
+        if not ratio_passes:
+            multiplier_label = f" (lunch adjustment: {threshold_multiplier}x)" if threshold_multiplier > 1.0 else ""
+            log_event(
+                "signal",
+                f"{symbol} threshold blocked: ratio {raw_ratio:.2f}x "
+                f"does not meet effective threshold {effective_threshold:.2f}x{multiplier_label}",
+                symbol=symbol,
+            )
+            return None
+
+        # ── Gate 5: Volume Spike ──────────────────────────────────────────────
+        # DISABLED - too restrictive, needs tuning on live data
+        # vol_check = check_volume_spike(tick_data, tick_history)
+        # if not vol_check["passed"]:
+        #     log_event("signal", f"{symbol} volume blocked: {vol_check['reason']}", symbol=symbol)
+        #     return None
+
+        # ── Gate 6: VWAP Alignment ────────────────────────────────────────────
+        # DISABLED - filtering out profitable trades, needs recalibration
+        # vwap_check = check_vwap_alignment(signal["action"], current_price, tick_history)
+        # if not vwap_check["passed"]:
+        #     log_event("signal", f"{symbol} VWAP blocked: {vwap_check['reason']}", symbol=symbol)
+        #     return None
 
         ratio = self._display_ratio(bid_qty, ask_qty, signal["action"])
 

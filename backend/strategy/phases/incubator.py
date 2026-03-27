@@ -194,14 +194,16 @@ class Incubator:
                 "trigger_price": current_price,
                 "first_seen": datetime.now(),
                 "confirming_ticks": 0,
+                "hold_ticks": 0,           # consecutive ticks holding after criteria met
                 "candidate": candidate,  # preserve signal_meta from fire time
             }
             log_event(
                 "signal",
                 f"{symbol} INCUBATING {candidate.action} @ ₹{current_price}  "
-                f"(need {config.INCUBATION_MIN_TICKS}+ confirming ticks AND "
-                f"{config.INCUBATION_PRICE_MOVE_PCT * 100:.1f}% move within "
-                f"{config.INCUBATION_TIMEOUT_SECS}s)",
+                f"(need {config.INCUBATION_MIN_TICKS}+ ticks, "
+                f"{config.INCUBATION_PRICE_MOVE_PCT * 100:.1f}% move, "
+                f"{config.INCUBATION_MIN_DURATION_SECS}s min, "
+                f"then {config.INCUBATION_HOLD_TICKS} hold ticks)",
                 symbol=symbol,
             )
             return None
@@ -255,20 +257,40 @@ class Incubator:
 
         move_pct = abs(current_price - trigger) / trigger if trigger > 0 else 0
 
-        # Confirmed when BOTH:
-        #   confirming_ticks >= INCUBATION_MIN_TICKS (default 4)
-        #   total price move  >= INCUBATION_PRICE_MOVE_PCT (default 0.1%)
-        confirmed = (
+        # Phase 1 criteria: enough ticks, enough move, enough time elapsed.
+        # All three must be met before we start counting hold ticks.
+        phase1_met = (
             watch["confirming_ticks"] >= config.INCUBATION_MIN_TICKS
             and move_pct >= config.INCUBATION_PRICE_MOVE_PCT
+            and age >= config.INCUBATION_MIN_DURATION_SECS
         )
+
+        # Phase 2 (hold check): once phase 1 is met, price must STAY in signal
+        # direction for INCUBATION_HOLD_TICKS consecutive ticks.
+        # If it reverses during hold, reset hold_ticks to 0.
+        # This catches snap-back oscillations (e.g. NOCIL confirmed in 11s then
+        # immediately retraced above trigger).
+        if phase1_met:
+            price_holding = (
+                (candidate.action == "BUY" and current_price > trigger) or
+                (candidate.action == "SELL" and current_price < trigger)
+            )
+            if price_holding:
+                watch["hold_ticks"] += 1
+            else:
+                watch["hold_ticks"] = 0
+        else:
+            watch["hold_ticks"] = 0
+
+        confirmed = phase1_met and watch["hold_ticks"] >= config.INCUBATION_HOLD_TICKS
 
         log_event(
             "signal",
             f"{symbol} WATCHING {watch['action']}  "
             f"ticks={watch['confirming_ticks']}/{config.INCUBATION_MIN_TICKS}  "
             f"move={move_pct * 100:.3f}%/{config.INCUBATION_PRICE_MOVE_PCT * 100:.1f}%  "
-            f"age={age:.0f}s/{config.INCUBATION_TIMEOUT_SECS}s  "
+            f"age={age:.0f}s/{config.INCUBATION_MIN_DURATION_SECS}s min  "
+            f"hold={watch['hold_ticks']}/{config.INCUBATION_HOLD_TICKS}  "
             f"trigger=₹{trigger}  now=₹{current_price}",
             symbol=symbol,
         )

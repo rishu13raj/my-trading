@@ -464,12 +464,14 @@ function updateStockPositions(activeTrades) {
         const pnl = trade.direction === 'BUY'
             ? (cur - trade.entry_price) * trade.entry_qty
             : (trade.entry_price - cur) * trade.entry_qty;
+        const entryVal = trade.entry_price * trade.entry_qty;
+        const pnlPct = entryVal > 0 ? (pnl / entryVal * 100) : 0;
         tbody.innerHTML = `
             <tr>
                 <td>${trade.direction}</td>
                 <td>₹${trade.entry_price.toFixed(2)}</td>
                 <td>₹${cur.toFixed(2)}</td>
-                <td class="${pnl >= 0 ? 'positive' : 'negative'}">₹${pnl.toFixed(2)}</td>
+                <td class="${pnl >= 0 ? 'positive' : 'negative'}">₹${pnl.toFixed(2)} <span style="font-size:0.85em">(${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)</span></td>
                 <td>${trade.exit_analysis?.should_exit ? 'Exit soon' : 'Holding'}</td>
             </tr>`;
     });
@@ -714,6 +716,8 @@ async function updatePositions() {
                     : (pos.entry_price - pos.current_price) * pos.entry_qty
             ) : 0;
 
+            const entryValue = pos.entry_price * pos.entry_qty;
+            const pnlPct = entryValue > 0 ? (pnl / entryValue * 100) : 0;
             const pnlClass = pnl > 0 ? 'positive' : 'negative';
             const status = pos.exit_analysis?.should_exit ? '⚠️ Exit' : '✓ Hold';
 
@@ -723,7 +727,7 @@ async function updatePositions() {
                     <td>${pos.direction}</td>
                     <td>₹${pos.entry_price.toFixed(2)}</td>
                     <td>₹${pos.current_price.toFixed(2)}</td>
-                    <td class="${pnlClass}">₹${pnl.toFixed(2)}</td>
+                    <td class="${pnlClass}">₹${pnl.toFixed(2)} <span style="font-size:0.85em">(${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)</span></td>
                     <td>${status}</td>
                     <td><button class="btn btn-danger btn-sm" onclick="exitTrade(${pos.trade_id})">Exit</button></td>
                 </tr>
@@ -808,20 +812,20 @@ function syncConfigSliders(cfg) {
     const sl  = document.getElementById('stopLoss');
     const mt  = document.getElementById('maxTrades');
     if (cap) { cap.value = cfg.capital_per_trade; document.getElementById('capitalDisplay').textContent = cfg.capital_per_trade; }
-    if (sl)  { sl.value  = cfg.stop_loss_pct * 100; document.getElementById('slDisplay').textContent = Math.round(cfg.stop_loss_pct * 100); }
+    if (sl)  { sl.value  = cfg.stop_loss_pct * 100; document.getElementById('slDisplay').textContent = (cfg.stop_loss_pct * 100).toFixed(1); }
     if (mt)  { mt.value  = cfg.max_active_trades; document.getElementById('maxTradesDisplay').textContent = cfg.max_active_trades; }
 }
 
 function onSettingChange() {
     const capVal = parseInt(document.getElementById('capital').value);
-    const slVal  = parseInt(document.getElementById('stopLoss').value);
+    const slVal  = parseFloat(document.getElementById('stopLoss').value);
     const mtVal  = parseInt(document.getElementById('maxTrades').value);
     document.getElementById('capitalDisplay').textContent = capVal;
-    document.getElementById('slDisplay').textContent = slVal;
+    document.getElementById('slDisplay').textContent = slVal.toFixed(1);
     document.getElementById('maxTradesDisplay').textContent = mtVal;
 
     const dirty = capVal !== _serverConfig.capital_per_trade ||
-                  slVal  !== Math.round(_serverConfig.stop_loss_pct * 100) ||
+                  slVal  !== parseFloat((_serverConfig.stop_loss_pct * 100).toFixed(1)) ||
                   mtVal  !== _serverConfig.max_active_trades;
     document.getElementById('pushBtn').disabled = !dirty;
     document.getElementById('resetBtn').disabled = !dirty;
@@ -829,7 +833,7 @@ function onSettingChange() {
 
 async function pushSettings() {
     const capVal = parseInt(document.getElementById('capital').value);
-    const slVal  = parseInt(document.getElementById('stopLoss').value);
+    const slVal  = parseFloat(document.getElementById('stopLoss').value);
     const mtVal  = parseInt(document.getElementById('maxTrades').value);
     await patchConfig({ capital_per_trade: capVal, stop_loss_pct: slVal / 100, max_active_trades: mtVal });
     _serverConfig = { capital_per_trade: capVal, stop_loss_pct: slVal / 100, max_active_trades: mtVal };
@@ -842,10 +846,10 @@ function resetSettings() {
     const sl  = document.getElementById('stopLoss');
     const mt  = document.getElementById('maxTrades');
     cap.value = _serverConfig.capital_per_trade;
-    sl.value  = Math.round(_serverConfig.stop_loss_pct * 100);
+    sl.value  = (_serverConfig.stop_loss_pct * 100).toFixed(1);
     mt.value  = _serverConfig.max_active_trades;
     document.getElementById('capitalDisplay').textContent = _serverConfig.capital_per_trade;
-    document.getElementById('slDisplay').textContent = Math.round(_serverConfig.stop_loss_pct * 100);
+    document.getElementById('slDisplay').textContent = (_serverConfig.stop_loss_pct * 100).toFixed(1);
     document.getElementById('maxTradesDisplay').textContent = _serverConfig.max_active_trades;
     document.getElementById('pushBtn').disabled = true;
     document.getElementById('resetBtn').disabled = true;
