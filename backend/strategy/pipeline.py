@@ -158,7 +158,6 @@ from strategy.phases.incubator import Incubator
 from strategy.phases.monitor import Monitor
 from strategy.phases.scanner import Scanner
 from strategy.types import ConfirmedSignal, ExitDecision
-from strategy.gates.session_momentum import session_momentum_gate
 from trading.order_manager import order_manager
 from trading.paper_trader import paper_trader
 
@@ -224,12 +223,6 @@ class TradePipeline:
 
         if not symbol or not current_price:
             return
-
-        # ── Session Momentum: update on every tick ────────────────────────────
-        # Must run before any gate check. Tracks the first 30 min of each
-        # stock's session to establish directional bias.
-        if timestamp:
-            session_momentum_gate.on_tick(symbol, current_price, timestamp)
 
         # Log every tick for visibility — operator can see the stream in the
         # activity log.  The ratio here is the raw bid/ask (not display-flipped)

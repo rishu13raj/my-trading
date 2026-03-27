@@ -145,7 +145,18 @@ class EntryPhase:
             )
             return None
 
-        # Gate 3: Portfolio capacity
+        # Gate 3: Minimum stock price
+        # Blocks penny/micro-cap stocks where 1% stop-loss in absolute terms
+        # is too small to be meaningful and large quantities amplify losses.
+        if current_price < config.MIN_STOCK_PRICE:
+            log_event(
+                "signal",
+                f"{symbol} entry blocked: price ₹{current_price} below minimum ₹{config.MIN_STOCK_PRICE}",
+                symbol=symbol,
+            )
+            return None
+
+        # Gate 4: Portfolio capacity
         # MAX_ACTIVE_TRADES = 2 by default.  Having too many simultaneous open
         # trades amplifies losses in correlated moves (e.g., all stocks selling
         # off together) and fragments attention during manual monitoring.
@@ -172,6 +183,14 @@ class EntryPhase:
 
         if db.get_trading_paused():
             log_event("signal", f"{symbol} flip blocked: trading paused for today", symbol=symbol)
+            return None
+
+        if current_price < config.MIN_STOCK_PRICE:
+            log_event(
+                "signal",
+                f"{symbol} flip blocked: price ₹{current_price} below minimum ₹{config.MIN_STOCK_PRICE}",
+                symbol=symbol,
+            )
             return None
 
         status = order_manager.get_portfolio_status()

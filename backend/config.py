@@ -52,12 +52,19 @@ class Config:
     INCUBATION_MIN_DURATION_SECS = int(os.getenv("INCUBATION_MIN_DURATION_SECS", 30))    # min watch time before confirming
     INCUBATION_HOLD_TICKS        = int(os.getenv("INCUBATION_HOLD_TICKS", 3))            # ticks price must hold after criteria met
 
-    # Time-of-Day Gate (Gate 4)
-    TRADING_BLOCK_START = os.getenv("TRADING_BLOCK_START", "0915")  # HHMM format, 09:15
-    TRADING_BLOCK_END = os.getenv("TRADING_BLOCK_END", "0930")      # HHMM format, 09:30
-    LUNCH_BLOCK_START = os.getenv("LUNCH_BLOCK_START", "1200")      # HHMM format, 12:00
-    LUNCH_BLOCK_END = os.getenv("LUNCH_BLOCK_END", "1330")          # HHMM format, 13:30
-    LUNCH_THRESHOLD_RATIO_MULTIPLIER = float(os.getenv("LUNCH_THRESHOLD_RATIO_MULTIPLIER", 1.5))
+    # Time-of-Day Gate — two allowed sessions only, everything else blocked.
+    # Based on 3-day analysis: 09:45-10:45 and 13:15-15:30 are profitable.
+    # 10:45-13:15 is a dead zone (-₹4,871 gross across all 3 days).
+    MORNING_SESSION_START = os.getenv("MORNING_SESSION_START", "0945")   # HHMM
+    MORNING_SESSION_END   = os.getenv("MORNING_SESSION_END",   "1045")   # HHMM
+    AFTERNOON_SESSION_START = os.getenv("AFTERNOON_SESSION_START", "1315")  # HHMM
+    AFTERNOON_SESSION_END   = os.getenv("AFTERNOON_SESSION_END",   "1530")  # HHMM
+
+    # Minimum stock price filter — blocks entry on penny/micro-cap stocks.
+    # Sub-₹50 stocks produce huge share quantities (e.g. EASEMYTRIP ₹7 → 14,000 shares).
+    # A 1% stop-loss on ₹7 = ₹0.07/share × 14,000 = ₹1,000 per stop — triggered constantly.
+    # OFI signal quality also degrades on very thin absolute spreads.
+    MIN_STOCK_PRICE = float(os.getenv("MIN_STOCK_PRICE", 50.0))
 
     # Volume Spike Gate
     VOLUME_SPIKE_MULTIPLIER = float(os.getenv("VOLUME_SPIKE_MULTIPLIER", 2.5))  # require 2.5x avg volume

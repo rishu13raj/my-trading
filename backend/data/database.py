@@ -217,16 +217,28 @@ class Database:
 
         return result[0] if result else 0.0
 
-    def get_recent_ticks(self, symbol: str, limit: int = 100) -> List[Dict]:
-        """Get recent ticks for a symbol"""
+    def get_recent_ticks(self, symbol: str, limit: int = 100, as_of_ts: int = None) -> List[Dict]:
+        """Get recent ticks for a symbol.
+
+        as_of_ts: when set, only return ticks with timestamp <= as_of_ts.
+                  Used by backtest to avoid reading future data.
+        """
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT * FROM ticks
-            WHERE symbol = ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-        """, (symbol, limit))
+        if as_of_ts is not None:
+            cursor.execute("""
+                SELECT * FROM ticks
+                WHERE symbol = ? AND timestamp <= ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (symbol, as_of_ts, limit))
+        else:
+            cursor.execute("""
+                SELECT * FROM ticks
+                WHERE symbol = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (symbol, limit))
         rows = cursor.fetchall()
         conn.close()
 

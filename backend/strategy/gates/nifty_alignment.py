@@ -37,14 +37,19 @@ from config import config
 from data.database import db
 
 
-def get_nifty_direction() -> str:
+def get_nifty_direction(as_of_ts: int = None) -> str:
     """
     Returns 'UP', 'DOWN', or 'NEUTRAL' based on Nifty's recent trend.
     'NEUTRAL' also covers the no-data case (benefit of the doubt).
+
+    as_of_ts: Unix timestamp upper bound. When provided (backtest mode),
+              only ticks up to this time are considered. None = live mode
+              (uses most recent ticks in DB).
     """
     ticks = db.get_recent_ticks(
         config.NIFTY_SYMBOL,
-        limit=config.NIFTY_ALIGNMENT_WINDOW_MINS * 10  # ~10 ticks/min
+        limit=config.NIFTY_ALIGNMENT_WINDOW_MINS * 10,  # ~10 ticks/min
+        as_of_ts=as_of_ts,
     )
     if len(ticks) < 5:
         return "NEUTRAL"  # not enough data — don't block
@@ -72,12 +77,14 @@ def get_nifty_direction() -> str:
     return "NEUTRAL"
 
 
-def blocks(action: str) -> bool:
+def blocks(action: str, as_of_ts: int = None) -> bool:
     """
     Returns True if the current Nifty direction blocks the given action.
     SELL blocked when Nifty is rising. BUY blocked when Nifty is falling.
+
+    as_of_ts: passed through to get_nifty_direction for backtest mode.
     """
-    direction = get_nifty_direction()
+    direction = get_nifty_direction(as_of_ts=as_of_ts)
     if direction == "UP" and action == "SELL":
         return True
     if direction == "DOWN" and action == "BUY":

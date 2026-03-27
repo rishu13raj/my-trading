@@ -60,7 +60,10 @@ class _BacktestDB:
     Never touches trading.db.
     """
 
-    def get_recent_ticks(self, symbol: str, limit: int = 100) -> list:
+    def get_recent_ticks(self, symbol: str, limit: int = 100, as_of_ts: int = None) -> list:
+        # as_of_ts is ignored: _tick_bufs already contains only ticks seen so
+        # far in the replay (populated in chronological order), so the buffer
+        # is naturally time-bounded to the current replay point.
         return _tick_bufs[symbol][:limit]
 
     def get_active_trades(self) -> list:
@@ -245,20 +248,24 @@ def run(date_str: str = None):
     t_930 = int(_dt_module.datetime(year, month, day,  9, 30, 0).timestamp())
     t_end = int(_dt_module.datetime(year, month, day, 15, 30, 0).timestamp())
 
-    # Auto-detect watchlist: all symbols that have post-09:30 ticks that day.
+    # Auto-detect trading watchlist: all symbols that have post-09:30 ticks,
+    # EXCLUDING index symbols (NIFTY 50) which are loaded for conviction gates
+    # but never traded.
     sym_rows = real_conn.execute("""
         SELECT DISTINCT symbol FROM ticks
         WHERE timestamp >= ? AND timestamp <= ?
     """, [t_930, t_end]).fetchall()
-    watchlist = {r['symbol'] for r in sym_rows}
+    all_symbols = {r['symbol'] for r in sym_rows}
+    non_trading = {config.NIFTY_SYMBOL}  # indices: loaded but not traded
+    watchlist = all_symbols - non_trading  # symbols the pipeline may trade
 
     rows = real_conn.execute(f"""
         SELECT symbol, timestamp, ltp, bid_qty, ask_qty, volume
         FROM ticks
         WHERE timestamp >= ? AND timestamp <= ?
-          AND symbol IN ({','.join('?' * len(watchlist))})
+          AND symbol IN ({','.join('?' * len(all_symbols))})
         ORDER BY timestamp ASC, rowid ASC
-    """, [t_915, t_end] + list(watchlist)).fetchall()
+    """, [t_915, t_end] + list(all_symbols)).fetchall()
     real_conn.close()
 
     all_ticks  = [dict(r) for r in rows]
@@ -280,6 +287,12 @@ def run(date_str: str = None):
 
     # Set simulation clock to the start of the replay day.
     _SIM_NOW[0] = _dt_module.datetime(year, month, day, 9, 30, 0)
+
+    # Reset state from any previous backtest run.
+    _tick_bufs.clear()
+    _sim_active.clear()
+    _sim_closed.clear()
+    _sim_id[0] = 0
 
     # Pre-populate tick buffers so the incubator trend gate has history
     # at the very first post-09:30 tick.
