@@ -136,23 +136,34 @@ my-trading/
 
 ## 🔐 Environment Setup
 
-Edit `.env` file:
+**Credentials and all config live in `.env` — never hardcode them in code.**
+
 ```bash
-nano .env
+cp .env.example .env
+nano .env   # fill in your values
 ```
 
-Required values:
+`.env` is gitignored. It will never be committed. `.env.example` is committed and shows every available key with placeholder values — it is the source of truth for what can be configured.
+
+### Required (must fill in)
 ```
 API_KEY=your_zerodha_api_key
 API_SECRET=your_zerodha_api_secret
-ACCESS_TOKEN=                    # Auto-generated after auth
+ACCESS_TOKEN=        # generated daily via the Authenticate button in the dashboard
 ```
 
-All settings managed via `.env`:
-- Trading parameters (capital, stop loss %)
-- API server (host, port)
-- Database path
-- Strategy parameters (thresholds, windows)
+`API_KEY` and `API_SECRET` come from https://kite.zerodha.com/account/settings/developers. Each user needs their own — credentials cannot be shared between accounts.
+
+`ACCESS_TOKEN` expires at midnight every day. It is regenerated automatically when you click "Authenticate Zerodha" in the dashboard. The app writes the new token back to `.env` automatically.
+
+### Optional (defaults in `.env.example` are sensible)
+All trading parameters — capital per trade, stop loss %, session windows, thresholds — are in `.env`. Change them there, restart the backend, no code changes needed.
+
+### For a new coding agent
+- **Never** add credentials to any `.py`, `.js`, `.json`, or `.yaml` file
+- **Never** commit `.env` (it is gitignored at root level)
+- **Always** add new config values to `config.py` via `os.getenv("KEY", default)` and document them in `.env.example`
+- The single source of truth for all env keys is `.env.example`
 
 ---
 
